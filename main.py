@@ -25,4 +25,4 @@ with open(args.result_path, 'w+') as results_file:
         users = json.load(source_file)["p-file-20"]["patron-record"]
         for user in users:
             import_struct["users"].append(mapper.do_map(user))
-        print(json.dumps(import_struct, indent=4))
+#        print(json.dumps(import_struct, indent=4))

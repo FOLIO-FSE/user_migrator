@@ -1,7 +1,14 @@
+import usaddress
 import uuid
 
 
 class Aleph:
+
+    states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
+              "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+              "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+              "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+              "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
 
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
@@ -61,7 +68,19 @@ class Aleph:
         z304 = aleph_user['z304']
         line1 = z304["z304-address-1"] if "z304-address-1" in z304 else ''
         line2 = z304["z304-address-2"] if "z304-address-2" in z304 else ''
-
+        temp_country = (z304["z304-address-4"] if 'z304-address-4' in z304
+                        else '')
+        if temp_country:
+            line2 += z304["z304-address-3"]
+        elif 'z304-address-3' in z304 and all(' ' + state in z304['z304-address-3'] for state
+                                              in self.states):
+            temp_country = z304["z304-address-3"]
+            print(temp_country)
+        elif 'z304-address-3' in z304:
+            p_address = usaddress.parse(z304['z304-address-3'])
+            print(p_address)
+        else:
+            print(z304["z304-address-2"])
         return {"countryId": self.get_country_id(aleph_user),
                 "addressTypeId": "",
                 "addressLine1": line1,
@@ -81,4 +100,4 @@ class Aleph:
         return ""
 
     def get_zip(self, aleph_user):
-        return ""
+        return aleph_user['z304']['z304-zip']

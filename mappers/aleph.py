@@ -4,10 +4,10 @@ import requests
 from jsonschema import validate
 
 
-class AlephToFolioMapper:
+class Aleph:
 
     def __init__(self, config):
-        self.groupsmap = config.groupsmap
+        print(config)
 
     def do_map(self, aleph_user):
         return {'id': str(uuid.uuid4()),
