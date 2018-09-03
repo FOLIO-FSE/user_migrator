@@ -1,5 +1,8 @@
 import usaddress
 import uuid
+import requests
+import csv
+import io
 
 
 class Aleph:
@@ -12,6 +15,11 @@ class Aleph:
 
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
+        country_codes_url = ("https://raw.githubusercontent.com/"
+                             "datasets/country-codes/master/data/"
+                             "country-codes.csv")
+        req = requests.get(country_codes_url)
+        self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def do_map(self, aleph_user):
         return {"id": str(uuid.uuid4()),
@@ -24,7 +32,7 @@ class Aleph:
                              "lastName": self.get_names(aleph_user)[0],
                              "firstName": self.get_names(aleph_user)[1],
                              "phone": aleph_user["z304"]["z304-telephone"],
-                             "addresses": self.get_addresses(aleph_user)},
+                             "addresses": [self.get_addresses(aleph_user)]},
                 "expirationDate": self.get_expiration_date(aleph_user)}
 
     def get_group(self, aleph_user):
@@ -70,34 +78,59 @@ class Aleph:
         line2 = z304["z304-address-2"] if "z304-address-2" in z304 else ''
         temp_country = (z304["z304-address-4"] if 'z304-address-4' in z304
                         else '')
+        # Has country in line 4. Line 3 likely contains a foreign city/state
         if temp_country:
             line2 += z304["z304-address-3"]
-        elif 'z304-address-3' in z304 and all(' ' + state in z304['z304-address-3'] for state
+            line_to_parse = z304["z304-address-3"]
+        # address 3 has NO US state abbr. must conntain country...
+        elif 'z304-address-3' in z304 and all(' ' + state
+                                              not in z304['z304-address-3']
+                                              for state
                                               in self.states):
             temp_country = z304["z304-address-3"]
-            print(temp_country)
+            line_to_parse = ''
+        # now, this is likely the state-city part of an US address
         elif 'z304-address-3' in z304:
-            p_address = usaddress.parse(z304['z304-address-3'])
-            print(p_address)
+            line_to_parse = z304['z304-address-3']
+            temp_country = 'United States of America (the)'
+        elif 'z304-address-2' in z304:
+            line_to_parse = z304['z304-address-2']
+            temp_country = 'United States of America (the)'
         else:
-            print(z304["z304-address-2"])
-        return {"countryId": self.get_country_id(aleph_user),
-                "addressTypeId": "",
+            line_to_parse = ''
+            temp_country = 'United States of America (the)'
+        return {"countryId": self.get_country_id(temp_country),
+                "addressTypeId": "Home",
                 "addressLine1": line1,
                 "addressLine2": line2,
-                "region": self.get_region(aleph_user),
-                "city": self.get_city(aleph_user),
+                "region": self.get_region(line_to_parse),
+                "city": self.get_city(line_to_parse),
                 "primaryAddress": True,
                 "postalCode": self.get_zip(aleph_user)}
 
-    def get_country_id(self, aleph_user):
-        return ""
+    def get_country_id(self, country):
+        try:
+            c_id = next(c['ISO3166-1-Alpha-2'].lower() for c
+                        in self.country_data
+                        if(country) and
+                        c['UNTERM English Short'].lower() == country.lower())
+            return c_id
+        except Exception as a:
+            return ''
 
-    def get_region(self, aleph_user):
-        return ""
+    def get_region(self, address_line):
+        temp_region = ''
+        parse = usaddress.tag(address_line)
+        return (parse[0]['StateName']
+                if 'StateName' in parse[0]
+                else temp_region)
 
-    def get_city(self, aleph_user):
-        return ""
+    def get_city(self, address_line):
+        temp_city = ''
+        parse = usaddress.tag(address_line)
+        return (parse[0]['PlaceName']
+                if 'PlaceName' in parse[0]
+                else temp_city)
 
     def get_zip(self, aleph_user):
         return aleph_user['z304']['z304-zip']
