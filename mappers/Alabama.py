@@ -1,3 +1,4 @@
+import re
 import uuid
 import requests
 import csv
@@ -31,33 +32,51 @@ class Alabama:
                 "personal": {"preferredContactTypeId": "mail",
                              "lastName": self.get_names(user)[0],
                              "firstName": self.get_names(user)[1],
-                             "phone": self.get_phone(user),
+                             "middleName": self.get_names(user)[2],
+                             "phone": self.get_phone(user, 'Primary'),
+                             "mobilePhone": self.get_phone(user, 'Mobile'),
                              "email": self.get_email(user),
+
                              "addresses": list(self.get_addresses(user))},
                 "expirationDate": self.get_expiration_date(user)}
 
     def get_users(self, source_file):
         return json.load(source_file)['patronList']['patron']
 
-    def get_phone(self, user):
-        has_temp = 'tempAddressList' in user
-        t_addr_path = "tempAddressList.tempAddress"
-        if (has_temp and 'patronPhoneList' in find(t_addr_path, user)):
-            t_addr = find(t_addr_path, user)
-            phone_l = t_addr['patronPhoneList']['patronPhone']
-            if isinstance(phone_l, (list,)):
-                return phone_l[0]['phone']
-            elif 'phone' in phone_l:
-                return phone_l['phone']
-            else:
-                print(phone_l)
+    def get_phones(self, user):
+        has_temp = ('tempAddressList' in user and
+                    'tempAddress' in user['tempAddressList'])
+        t_addr_path = "patronPhoneList.patronPhone"
+        if (has_temp):
+            temp_addrs = find_multi("tempAddressList.tempAddress", user)
+            for temp_addr in temp_addrs:
+                phone_l = find(t_addr_path, temp_addr)
+                if phone_l and isinstance(phone_l, (list,)):
+                    for p in phone_l:
+                        if re.sub(r"[()\-\s]", '', p['phone']):
+                            yield p
+                elif (phone_l and 'phone' in phone_l
+                      and len(re.sub(r"[()\-\s]", '', phone_l['phone'])) > 1):
+                    yield phone_l
+                else:
+                    yield None
         else:
-            return ''
+            return []
+
+    def get_phone(self, user, kind):
+        try:
+            ps = self.get_phones(user)
+            return next((p['phone'] for p in ps if p['type'] == kind))
+        except Exception as ee:
+            print("No {} phone for user:\t{}".format(kind,
+                                                     self.get_ext_uid(user)))
 
     def get_email(self, user):
         if 'emailList' in user:
             p_email = user['emailList']['patronEmail']
             if isinstance(p_email, (list,)):
+                print("Multiple emails!")
+                print(p_email)
                 return p_email[0]['email']
             else:
                 return p_email['email']
@@ -86,7 +105,7 @@ class Alabama:
         return user['patronId']
 
     def get_ext_uid(self, user):
-        return user['patronId']
+        return user['institutionID']
 
     def get_active(self, user):
         b = self.get_correct_barcode_struct(user)
@@ -100,7 +119,9 @@ class Alabama:
         return ((user['lastName'] if 'lastName' in user
                  else ''),
                 (user['firstName'] if 'firstName' in user
-                else ''))
+                else ''),
+                (user['middleName'] if 'middleName' in user
+                 else ''))
 
     def get_expiration_date(self, user):
         return user['expirationDate']
@@ -157,4 +178,15 @@ def find(element, json):
     rv = json
     for key in keys:
         rv = rv[key]
+    return rv
+
+
+def find_multi(element, json):
+    keys = element.split('.')
+    rv = json
+    for key in keys:
+        rv = rv[key]
+    if isinstance(rv, (list,)):
         return rv
+    else:
+        yield rv
