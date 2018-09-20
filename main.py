@@ -3,6 +3,16 @@ import json
 import argparse
 from mappers.Aleph import Aleph
 from mappers.Alabama import Alabama
+from mappers.Chalmers import Chalmers
+
+
+def get_mapper(mapperName, config):
+    return {
+        'alabama': Alabama(config),
+        'aleph': Aleph(config),
+        'chalmers': Chalmers(config)
+    }[mapperName]
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("source_path",
@@ -18,9 +28,7 @@ args = parser.parse_args()
 with open(args.groups_map_path, 'r') as groups_map_file:
     groups_map = list(csv.DictReader(groups_map_file))
     config = {"groupsmap": groups_map}
-    mapper = Aleph(config)
-    mapper = (Aleph(config) if args.mapper == 'aleph'
-              else Alabama(config))
+    mapper = get_mapper(args.mapper, config)
     import_struct = {"source_type": "test_hampat",
                      "deactivateMissingUsers": False,
                      "users": [],
