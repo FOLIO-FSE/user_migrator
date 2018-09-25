@@ -8,12 +8,6 @@ import json
 
 class Alabama:
 
-    states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
-              "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-              "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-              "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-              "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
-
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
         country_codes_url = ("https://raw.githubusercontent.com/"
@@ -94,7 +88,10 @@ class Alabama:
     def get_correct_barcode_struct(self, user):
         b = user["patronBarcodeList"]['patronBarcode']
         if isinstance(b, (list,)):
-            return b[0]
+            b_sort = sorted(b,
+                            key=lambda x: x['barcodeModifiedDate'],
+                            reverse=True)
+            return b_sort[0]
         elif isinstance(b, (dict,)):
             return b
         else:
@@ -102,7 +99,12 @@ class Alabama:
             return b
 
     def get_user_name(self, user):
-        return user['patronId']
+        email = self.get_email(user).split('@')
+        if len(email) > 1 and 'ua.edu' in email[1]:
+            return email[0]
+        else:
+            print('Not an UA address: {}'.format(email))
+            return email[0]
 
     def get_ext_uid(self, user):
         return user['institutionID']
@@ -130,13 +132,16 @@ class Alabama:
         has_temp_addr = False
         if 'tempAddressList' in user:
             has_temp_addr = True
-            t_addr = user['tempAddressList']['tempAddress']
+            temp_addrs = find_multi("tempAddressList.tempAddress", user)
+            t_addr = next(t for t in temp_addrs)
             yield {"countryId": '',
                    "addressTypeId": "Home",
                    "addressLine1": (t_addr['line1'] if 'line1' in t_addr
                                     else ''),
-                   # "addressLine2": t_addr['line2'],
-                   # "addressLine3": t_addr['line3'],
+                   "addressLine2": (t_addr['line2'] if 'line2' in t_addr
+                                    else ''),
+                   "addressLine3": (t_addr['line3'] if 'line3' in t_addr
+                                    else ''),
                    "region": (t_addr['stateProvince']
                               if 'stateProvince' in t_addr else ''),
                    "city": (t_addr['city'] if 'city' in t_addr
@@ -147,10 +152,10 @@ class Alabama:
 
         p_addr = user['permAddress']
         yield {"countryId": '',
-               "addressTypeId": "Home",
+               "addressTypeId": "Campus",
                "addressLine1": (p_addr['line1'] if 'line1' in p_addr else ''),
-               # "addressLine2": p_addr['line2'],
-               # "addressLine3": p_addr['line3'],
+               "addressLine2": (p_addr['line2'] if 'line2' in p_addr else ''),
+               "addressLine3": (p_addr['line3'] if 'line3' in p_addr else ''),
                "region": (p_addr['stateProvince']
                           if 'stateProvince' in p_addr else ''),
                "city": (p_addr['city'] if 'city' in p_addr else ''),
@@ -174,7 +179,7 @@ def gen_dict_extract(key, var):
 
 
 def find(element, json):
-    keys = element.split('.')
+    keys = element.spli('.')
     rv = json
     for key in keys:
         rv = rv[key]
