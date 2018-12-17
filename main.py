@@ -3,15 +3,22 @@ import json
 import argparse
 from mappers.Aleph import Aleph
 from mappers.Alabama import Alabama
+from mappers.AlabamaBanner import AlabamaBanner
 from mappers.Chalmers import Chalmers
 
 
 def get_mapper(mapperName, config):
     return {
         'alabama': Alabama(config),
+        'alabama_banner': AlabamaBanner(config),
         'aleph': Aleph(config),
         'chalmers': Chalmers(config)
     }[mapperName]
+
+
+def chunks(myList, n):
+    for i in range(0, len(myList), n):
+        yield myList[i:i+n]
 
 
 parser = argparse.ArgumentParser()
@@ -34,10 +41,16 @@ with open(args.groups_map_path, 'r') as groups_map_file:
                      "users": [],
                      "updateOnlyPresentFields": False,
                      "totalRecords": 0}
-with open(args.result_path, 'w+') as results_file:
     with open(args.source_path, 'r') as source_file:
+        i = 0
         users = mapper.get_users(source_file)
-        for user in users:
-            import_struct["users"].append(mapper.do_map(user))
-        import_struct["totalRecords"] = len(import_struct["users"])
-    results_file.write(json.dumps(import_struct, indent=4))
+        cs = chunks(users, 100)
+        for c in cs:
+            i += 1
+            import_struct["users"] = []
+            for user in c:
+                import_struct["users"].append(mapper.do_map(user))
+                import_struct["totalRecords"] = len(import_struct["users"])
+            path = args.result_path + str(i) + '.json'
+            with open(path, 'w+') as results_file:
+                results_file.write(json.dumps(import_struct, indent=4))

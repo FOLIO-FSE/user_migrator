@@ -1,4 +1,5 @@
 import json
+import traceback
 import usaddress
 from datetime import datetime
 import uuid
@@ -27,25 +28,53 @@ class Aleph:
         return json.load(source_file)["p-file-20"]["patron-record"]
 
     def do_map(self, aleph_user):
-        return {"id": str(uuid.uuid4()),
-                "patronGroup": self.get_group(aleph_user),
-                "barcode": self.get_barcode(aleph_user),
-                "username": self.get_user_name(aleph_user),
-                "externalSystemId": self.get_ext_uid(aleph_user),
-                "active": self.get_active(aleph_user),
-                "personal": {"preferredContactTypeId": "mail",
-                             "lastName": self.get_names(aleph_user)[0],
-                             "firstName": self.get_names(aleph_user)[1],
-                             "phone": aleph_user["z304"]["z304-telephone"],
-                             "email": aleph_user["z304"]["z304-email-address"],
-                             "addresses": [self.get_addresses(aleph_user)]},
-                "expirationDate": self.get_expiration_date(aleph_user)}
+        try:
+            return {"id": str(uuid.uuid4()),
+                    "patronGroup": self.get_group(aleph_user),
+                    "barcode": self.get_barcode(aleph_user),
+                    "username": self.get_user_name(aleph_user),
+                    "externalSystemId": self.get_ext_uid(aleph_user),
+                    "active": self.get_active(aleph_user),
+                    "personal": {"preferredContactTypeId": "mail",
+                                 "lastName": self.get_names(aleph_user)[0],
+                                 "firstName": self.get_names(aleph_user)[1],
+                                 "phone": self.get_phone(aleph_user),
+                                 "email": self.get_email(aleph_user),
+                                 "addresses": [self.get_addresses(aleph_user)]},
+                    "expirationDate": self.get_expiration_date(aleph_user)}
+        except Exception as ee:
+            traceback.print_exc()
+            print(self.get_user_name(aleph_user))
 
     def get_group(self, aleph_user):
-        a_group = self.get_z305(aleph_user)['z305-bor-status']
+        z305 = self.get_z305(aleph_user)
+        if 'z305-bor-status' in z305: 
+            a_group = z305['z305-bor-status']
+        elif 'bor-status' in z305:
+            a_group = z305['bor-status']
+        else:
+            a_group = None
         return next(g['Folio Code'] for g
                     in self.groupsmap
                     if g['ALEPH code'] == a_group)
+
+    def get_email(self, aleph_user):
+        z304 = self.get_z304(aleph_user)
+        if 'z304-email-address' in z304:
+            return z304['z304-email-address']
+        else:
+            print('No email address')
+            return ''
+
+    def get_phone(self, aleph_user):
+        z304 = self.get_z304(aleph_user)
+        if 'z304-telephone' in z304 and z304["z304-telephone"]:
+            return z304["z304-telephone"]
+        elif 'z304-telephone-2' in z304 and z304['z304-telephone-2']:
+            return z304['z304-telephone-2']
+        else:
+            print("Did not find a phone number")
+            return ''
 
     def get_barcode(self, aleph_user):
         return next(z308["z308-key-data"] for z308
@@ -78,13 +107,25 @@ class Aleph:
         p_date = datetime.strptime(d_string, "%Y%m%d").date()
         return p_date.strftime("%Y-%m-%d")
 
+    def get_elem(self, aleph_user, elem_name):
+        class_name = aleph_user[elem_name].__class__.__name__
+        if class_name in 'list':
+            return iter(aleph_user[elem_name])
+        else:
+            return iter([aleph_user[elem_name]])
+
+    def get_z304(self, aleph_user):
+        return next(self.get_elem(aleph_user, 'z304'))
+
     def get_z305(self, aleph_user):
+        z305s = self.get_elem(aleph_user, 'z305')
         return next(z305 for z305
-                    in aleph_user['z305']
-                    if z305['z305-sub-library'] == 'HAM50')
+                    in z305s
+                    if ('z305-sub-library' in z305 and
+                        z305['z305-sub-library'] != 'ALEPH'))
 
     def get_addresses(self, aleph_user):
-        z304 = aleph_user['z304']
+        z304 = self.get_z304(aleph_user)
         line1 = z304["z304-address-1"] if "z304-address-1" in z304 else ''
         line2 = z304["z304-address-2"] if "z304-address-2" in z304 else ''
         temp_country = (z304["z304-address-4"] if 'z304-address-4' in z304
@@ -117,7 +158,7 @@ class Aleph:
                 "region": self.get_region(line_to_parse),
                 "city": self.get_city(line_to_parse),
                 "primaryAddress": True,
-                "postalCode": self.get_zip(aleph_user)}
+                "postalCode": self.get_zip(z304)}
 
     def get_country_id(self, country):
         try:
@@ -143,5 +184,10 @@ class Aleph:
                 if 'PlaceName' in parse[0]
                 else temp_city)
 
-    def get_zip(self, aleph_user):
-        return aleph_user['z304']['z304-zip']
+    def get_zip(self, z304):
+        if 'z304-zip' in z304:
+            return z304['z304-zip']
+        else:
+            print('No zip')
+            return ''
+    

@@ -3,10 +3,9 @@ import uuid
 import requests
 import csv
 import io
-import json
 
 
-class Alabama:
+class AlabamaBanner:
 
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
@@ -16,26 +15,50 @@ class Alabama:
         req = requests.get(country_codes_url)
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
-    def do_map(self, user):
-        return {"id": str(uuid.uuid4()),
-                "patronGroup": self.get_group(user),
-                "barcode": self.get_barcode(user),
-                "username": self.get_user_name(user),
-                "externalSystemId": self.get_ext_uid(user),
-                "active": self.get_active(user),
-                "personal": {"preferredContactTypeId": "mail",
-                             "lastName": self.get_names(user)[0],
-                             "firstName": self.get_names(user)[1],
-                             "middleName": self.get_names(user)[2],
-                             "phone": self.get_phone(user, 'Primary'),
-                             "mobilePhone": self.get_phone(user, 'Mobile'),
-                             "email": self.get_email(user),
+    def lpos(self, start, end, string):
+        return string[int(start-1):int(end-1)].strip()
 
-                             "addresses": list(self.get_addresses(user))},
-                "expirationDate": self.get_expiration_date(user)}
+    def do_map(self, line):
+        user = {"id": str(uuid.uuid4()),
+                "patronGroup": self.lpos(46, 55, line),
+                "barcode": self.lpos(21, 45, line),
+                "username": self.lpos(239, 279, line),
+                "externalSystemId": self.lpos(239, 279, line),
+                "active": self.lpos(56, 56, line),
+                "personal": {"preferredContactTypeId": "mail",
+                             "lastName": self.lpos(311, 340, line),
+                             "firstName": self.lpos(341, 360, line),
+                             "middleName": self.lpos(361, 380, line),
+                             "phone": self.lpos(776, 835, line),
+                             "mobilePhone": self.lpos(836, 895, line),
+                             "email": self.lpos(1347, 1396, line),
+                             "addresses": list(self.get_addresses(line))},
+                "expirationDate": self.lpos(189, 199, line)}
+        return user
+
+    def get_addresses(self, line):
+        address1 = {"countryId": self.lpos(756, 775, line),
+                    "addressTypeId": "",
+                    "addressLine1": self.lpos(489, 538, line),
+                    "addressLine2": "{}\n{}".format(self.lpos(539, 578, line),
+                                                    self.lpos(579, 698, line)),
+                    "region": self.lpos(739, 745, line),
+                    "city": self.lpos(699, 738, line),
+                    "primaryAddress": True,
+                    "postalCode": self.lpos(746, 755, line)}
+        address2 = {"countryId": self.lpos(1185, 1204, line),
+                    "addressTypeId": "",
+                    "addressLine1": self.lpos(918, 967, line),
+                    "addressLine2": "{}\n{}".format(self.lpos(968, 1007, line),
+                                                    self.lpos(1008, 1127, line)),
+                    "region": self.lpos(1168, 1174, line),
+                    "city": self.lpos(1128, 1167, line),
+                    "primaryAddress": False,
+                    "postalCode": self.lpos(1175, 1184, line)}
+        return [address1, address2]
 
     def get_users(self, source_file):
-        return json.load(source_file)['patronList']['patron']
+        return source_file.readlines()
 
     def get_phones(self, user):
         has_temp = ('tempAddressList' in user and
@@ -141,43 +164,6 @@ class Alabama:
 
     def get_expiration_date(self, user):
         return user['expirationDate']
-
-    def get_addresses(self, user):
-        has_temp_addr = False
-        if 'tempAddressList' in user:
-            has_temp_addr = True
-            temp_addrs = find_multi("tempAddressList.tempAddress", user)
-            t_addr = next(t for t in temp_addrs)
-            yield {"countryId": '',
-                   "addressTypeId": "Home",
-                   "addressLine1": (t_addr['line1'] if 'line1' in t_addr
-                                    else ''),
-                   "addressLine2": ((t_addr['line2'] if 'line2' in t_addr
-                                    else '') +
-                                    (t_addr['line3'] if 'line3' in t_addr
-                                     else '')),
-                   "region": (t_addr['stateProvince']
-                              if 'stateProvince' in t_addr else ''),
-                   "city": (t_addr['city'] if 'city' in t_addr
-                            else ''),
-                   "primaryAddress": True,
-                   "postalCode": (t_addr['postalCode']
-                                  if 'postalCode' in t_addr else '')}
-
-        p_addr = user['permAddress']
-        yield {"countryId": '',
-               "addressTypeId": "Campus",
-               "addressLine1": (p_addr['line1'] if 'line1' in p_addr else ''),
-               "addressLine2": ((p_addr['line2'] if 'line2' in p_addr
-                                 else '') +
-                                (p_addr['line3'] if 'line3' in p_addr
-                                 else '')),
-               "region": (p_addr['stateProvince']
-                          if 'stateProvince' in p_addr else ''),
-               "city": (p_addr['city'] if 'city' in p_addr else ''),
-               "primaryAddress": not has_temp_addr,
-               "postalCode": (p_addr['postalCode']
-                              if 'postalCode' in p_addr else '')}
 
 
 def gen_dict_extract(key, var):
