@@ -16,96 +16,87 @@ class AlabamaBanner:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def lpos(self, start, end, string):
-        return string[int(start-1):int(end-1)].strip()
+        return string[int(start-1):int(end)].strip()
 
     def do_map(self, line):
+        phone1 = self.lpos(776, 800, line),
+        phone2 = self.lpos(1205, 1229, line),
+        mobile1 = self.lpos(801, 825, line),
+        mobile2 = self.lpos(1229, 1253, line),
+        if self.is_student(line):
+            phone = phone1
+            mobile = mobile1
+        else:
+            phone = phone2
+            mobile = mobile2
+
         user = {"id": str(uuid.uuid4()),
-                "patronGroup": self.lpos(46, 55, line),
+                "patronGroup": self.get_group(self.lpos(46, 55, line)),
                 "barcode": self.lpos(21, 45, line),
-                "username": self.lpos(239, 279, line),
-                "externalSystemId": self.lpos(239, 279, line),
-                "active": self.lpos(56, 56, line),
+                "username": self.lpos(1347, 1396, line).split('@')[0],
+                "externalSystemId": self.lpos(239, 268, line),
+                "active": self.lpos(56, 56, line) == "1",
                 "personal": {"preferredContactTypeId": "mail",
                              "lastName": self.lpos(311, 340, line),
                              "firstName": self.lpos(341, 360, line),
                              "middleName": self.lpos(361, 380, line),
-                             "phone": self.lpos(776, 835, line),
-                             "mobilePhone": self.lpos(836, 895, line),
+                             "phone": phone[0],
+                             "mobilePhone": mobile[0],
                              "email": self.lpos(1347, 1396, line),
                              "addresses": list(self.get_addresses(line))},
-                "expirationDate": self.lpos(189, 199, line)}
+                "expirationDate": self.lpos(189, 198, line).replace('.','-')}
+
         return user
 
+    def is_student(self, line):
+        group = self.get_group(self.lpos(46, 55, line))
+        return (group in ['UNDERGRADUATE', 'GRADUATE'])
+
     def get_addresses(self, line):
+        addr_type1 = self.lpos(467, 467, line),
+        addr_code_status1 = self.lpos(467, 467, line),
+        addr_type2 = self.lpos(896, 896, line),
+        addr_code_status2 = self.lpos(897, 897, line),
+        if addr_type1 == '1' and addr_code_status1 == 'N':
+            addr1_is_primary = True
+            addr2_is_primary = False
+        else:
+            addr1_is_primary = False
+            addr2_is_primary = True
+        if addr_type2 == '2' and addr_code_status2 == 'H':
+            addr2_is_primary = False
+            addr1_is_primary = True
+
         address1 = {"countryId": self.lpos(756, 775, line),
                     "addressTypeId": "",
                     "addressLine1": self.lpos(489, 538, line),
-                    "addressLine2": "{}\n{}".format(self.lpos(539, 578, line),
-                                                    self.lpos(579, 698, line)),
+                    "addressLine2": "\n".join([self.lpos(539, 538, line),
+                                               self.lpos(539, 578, line),
+                                               self.lpos(579, 618, line),
+                                               self.lpos(619, 658, line),
+                                               self.lpos(659, 698, line)]),
                     "region": self.lpos(739, 745, line),
                     "city": self.lpos(699, 738, line),
-                    "primaryAddress": True,
+                    "primaryAddress": addr1_is_primary,
                     "postalCode": self.lpos(746, 755, line)}
         address2 = {"countryId": self.lpos(1185, 1204, line),
-                    "addressTypeId": "",
+                    "addressTypeId": self.lpos(896, 896, line),
                     "addressLine1": self.lpos(918, 967, line),
-                    "addressLine2": "{}\n{}".format(self.lpos(968, 1007, line),
-                                                    self.lpos(1008, 1127, line)),
+                    "addressLine2": "\n".join([self.lpos(968, 1007, line),
+                                               self.lpos(1008, 1127, line)]),
                     "region": self.lpos(1168, 1174, line),
                     "city": self.lpos(1128, 1167, line),
-                    "primaryAddress": False,
+                    "primaryAddress": addr2_is_primary,
                     "postalCode": self.lpos(1175, 1184, line)}
         return [address1, address2]
 
     def get_users(self, source_file):
         return source_file.readlines()
 
-    def get_phones(self, user):
-        has_temp = ('tempAddressList' in user and
-                    'tempAddress' in user['tempAddressList'])
-        t_addr_path = "patronPhoneList.patronPhone"
-        if (has_temp):
-            temp_addrs = find_multi("tempAddressList.tempAddress", user)
-            for temp_addr in temp_addrs:
-                phone_l = find(t_addr_path, temp_addr)
-                if phone_l and isinstance(phone_l, (list,)):
-                    for p in phone_l:
-                        if re.sub(r"[()\-\s]", '', p['phone']):
-                            yield p
-                elif (phone_l and 'phone' in phone_l
-                      and len(re.sub(r"[()\-\s]", '', phone_l['phone'])) > 1):
-                    yield phone_l
-                else:
-                    yield None
-        else:
-            return []
-
-    def get_phone(self, user, kind):
-        try:
-            ps = self.get_phones(user)
-            return next((p['phone'] for p in ps if p['type'] == kind))
-        except Exception as ee:
-            print("No {} phone for user:\t{}".format(kind,
-                                                     self.get_ext_uid(user)))
-
-    def get_email(self, user):
-        if 'emailList' in user:
-            p_email = user['emailList']['patronEmail']
-            if isinstance(p_email, (list,)):
-                print("Multiple emails!")
-                print(p_email)
-                return p_email[0]['email']
-            else:
-                return p_email['email']
-        else:
-            return ''
-
-    def get_group(self, user):
-        b = self.get_correct_barcode_struct(user)
-        code = next(g['Folio Code'] for g
-                    in self.groupsmap
-                    if g['ILS code'] == b["patronGroup"])
-        return code
+    def get_group(self, ils_code):
+        return next((g['Folio Code'] for g
+                     in self.groupsmap
+                     if g['ILS code'] == ils_code), 'unmapped')
 
     def get_barcode(self, user):
         b = self.get_correct_barcode_struct(user)
