@@ -49,8 +49,11 @@ with open(args.groups_map_path, 'r') as groups_map_file:
             i += 1
             import_struct["users"] = []
             for user in c:
-                import_struct["users"].append(mapper.do_map(user))
-                import_struct["totalRecords"] = len(import_struct["users"])
+                try:
+                    import_struct["users"].append(mapper.do_map(user))
+                    import_struct["totalRecords"] = len(import_struct["users"])
+                except Exception as ee:
+                    print(ee)               
             path = args.result_path + str(i) + '.json'
             with open(path, 'w+') as results_file:
                 results_file.write(json.dumps(import_struct, indent=4))
