@@ -1,3 +1,4 @@
+import re
 import uuid
 import requests
 import csv
@@ -6,9 +7,12 @@ import json
 
 
 class Chalmers:
+    # TODO:Bring over number of loans 
+    # (fixed fields 50) and sum them up.
 
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
+        # TODO: Move country codes to central implementation
         country_codes_url = ("https://raw.githubusercontent.com/"
                              "datasets/country-codes/master/data/"
                              "country-codes.csv")
@@ -17,7 +21,7 @@ class Chalmers:
 
     def do_map(self, user):
         return {"id": str(uuid.uuid4()),
-                "patronGroup": user['patronType'],
+                "patronGroup": self.get_patron_group(user),
                 "barcode": self.get_barcode(user),
                 "username": self.get_user_name(user),
                 "externalSystemId": self.get_ext_uid(user),
@@ -34,17 +38,41 @@ class Chalmers:
         for line in source_file:
             yield json.loads(line)
 
+    def get_patron_group(self, user):
+        # TODO: Map patronType to Patron Group
+        return user['patronType']
+
     def get_phone(self, user):
         return ''
 
     def get_email(self, user):
-        return ''
+        if len(user['emails']) > 1:
+            raise ValueError("Too many emails for {}".format(user['id']))
+        else:
+            eml = user['emails'][0]
+            reg = r"[^@]+@[^@]+\.[^@]+"
+            if not re.match(reg, eml):
+                raise ValueError("email likely invalid {} for user {}"
+                                 .format(eml, user['id']))
+            else:
+                return eml
 
     def get_barcode(self, user):
-        return ''
+        if len(user['barcodes']) > 1:
+            raise ValueError("Too many barcodes for {}".format(user['id']))
+        else:
+            return user['barcodes'][0]
 
     def get_user_name(self, user):
-        return ''
+        if len(user['uniqueIds']) > 1:
+            raise ValueError("Too many unique ids for {}".format(user['id']))
+        else:
+            uid = user['uniqueIds'][0]
+            if len(uid) == 10:
+                return uid
+            else:
+                raise ValueError("Correct personnummer ({}) for user {}?"
+                                 .format(uid, user['id']))
 
     def get_ext_uid(self, user):
         return ''
