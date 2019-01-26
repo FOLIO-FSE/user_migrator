@@ -7,6 +7,7 @@ import io
 
 class AlabamaBanner:
 
+
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
         country_codes_url = ("https://raw.githubusercontent.com/"
@@ -53,10 +54,13 @@ class AlabamaBanner:
         return (group in ['UNDERGRADUATE', 'GRADUATE'])
 
     def get_addresses(self, line):
-        addr_type1 = self.lpos(467, 467, line),
-        addr_code_status1 = self.lpos(467, 467, line),
-        addr_type2 = self.lpos(896, 896, line),
-        addr_code_status2 = self.lpos(897, 897, line),
+        address_types = dict()
+        address_types['1'] = 'ae749f82-a4ef-47ca-b29c-0a5ad7bbff03'
+        address_types['2'] = '4c53934a-c32b-45a5-8cc0-16fafec19f6c'
+        addr_type1 = self.lpos(467, 467, line)
+        addr_code_status1 = self.lpos(467, 467, line)
+        addr_type2 = self.lpos(896, 896, line)
+        addr_code_status2 = self.lpos(897, 897, line)
         if addr_type1 == '1' and addr_code_status1 == 'N':
             addr1_is_primary = True
             addr2_is_primary = False
@@ -66,24 +70,31 @@ class AlabamaBanner:
         if addr_type2 == '2' and addr_code_status2 == 'H':
             addr2_is_primary = False
             addr1_is_primary = True
+        
+        e_temp = 'Badd address type {} for user {}'
+        user_id = self.lpos(1347, 1396, line).split('@')[0]
+        if addr_type1 not in ['1', '2']:
+            raise ValueError(e_temp.format(addr_type1, user_id))
+        if addr_type2 not in ['1', '2']:
+            raise ValueError(e_temp.format(addr_type2, user_id))
 
         address1 = {"countryId": self.lpos(756, 775, line),
-                    "addressTypeId": "",
+                    "addressTypeId": address_types[addr_type1],
                     "addressLine1": self.lpos(489, 538, line),
-                    "addressLine2": "\n".join([self.lpos(539, 538, line),
+                    "addressLine2": "\n".join(filter(None, [self.lpos(539, 538, line),
                                                self.lpos(539, 578, line),
                                                self.lpos(579, 618, line),
                                                self.lpos(619, 658, line),
-                                               self.lpos(659, 698, line)]),
+                                               self.lpos(659, 698, line)])),
                     "region": self.lpos(739, 745, line),
                     "city": self.lpos(699, 738, line),
                     "primaryAddress": addr1_is_primary,
                     "postalCode": self.lpos(746, 755, line)}
         address2 = {"countryId": self.lpos(1185, 1204, line),
-                    "addressTypeId": self.lpos(896, 896, line),
+                    "addressTypeId": address_types[addr_type2],
                     "addressLine1": self.lpos(918, 967, line),
-                    "addressLine2": "\n".join([self.lpos(968, 1007, line),
-                                               self.lpos(1008, 1127, line)]),
+                    "addressLine2": "\n".join(filter(None, [self.lpos(968, 1007, line),
+                                               self.lpos(1008, 1127, line)])),
                     "region": self.lpos(1168, 1174, line),
                     "city": self.lpos(1128, 1167, line),
                     "primaryAddress": addr2_is_primary,
