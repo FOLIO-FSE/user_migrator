@@ -1,3 +1,4 @@
+import itertools
 import csv
 import json
 import argparse
@@ -16,9 +17,12 @@ def get_mapper(mapperName, config):
     }[mapperName]
 
 
-def chunks(myList, n):
-    for i in range(0, len(myList), n):
-        yield myList[i:i+n]
+def chunks(myList, size):
+     iterator = iter(myList)
+     for first in iterator:
+         yield itertools.chain([first], itertools.islice(iterator, size - 1))
+    # for i in range(0, len(list(myList)), n):
+    #    yield myList[i:i+n]
 
 
 parser = argparse.ArgumentParser()
@@ -53,7 +57,7 @@ with open(args.groups_map_path, 'r') as groups_map_file:
                     import_struct["users"].append(mapper.do_map(user))
                     import_struct["totalRecords"] = len(import_struct["users"])
                 except Exception as ee:
-                    print(ee)               
+                    print(ee)
             path = args.result_path + str(i) + '.json'
             with open(path, 'w+') as results_file:
                 results_file.write(json.dumps(import_struct, indent=4))
