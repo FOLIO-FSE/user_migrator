@@ -1,3 +1,4 @@
+from itertools import chain
 import json
 import traceback
 import usaddress
@@ -25,56 +26,53 @@ class Aleph:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def get_users(self, source_file):
-        return json.load(source_file)["p-file-20"]["patron-record"]
+        for patron in json.load(source_file)["p-file-20"]["patron-record"]:
+            yield [patron, None]
 
     def do_map(self, aleph_user):
-        try:
-            return {"id": str(uuid.uuid4()),
-                    "patronGroup": self.get_group(aleph_user),
-                    "barcode": self.get_barcode(aleph_user),
-                    "username": self.get_user_name(aleph_user),
-                    "externalSystemId": self.get_ext_uid(aleph_user),
-                    "active": self.get_active(aleph_user),
-                    "personal": {"preferredContactTypeId": "mail",
-                                 "lastName": self.get_names(aleph_user)[0],
-                                 "firstName": self.get_names(aleph_user)[1],
-                                 "phone": self.get_phone(aleph_user),
-                                 "email": self.get_email(aleph_user),
-                                 "addresses": [self.get_addresses(aleph_user)]},
-                    "expirationDate": self.get_expiration_date(aleph_user)}
-        except Exception as ee:
-            traceback.print_exc()
-            print(self.get_user_name(aleph_user))
+        return {"id": str(uuid.uuid4()),
+                "patronGroup": self.get_group(aleph_user),
+                "barcode": self.get_barcode(aleph_user),
+                "username": self.get_user_name(aleph_user),
+                "externalSystemId": self.get_ext_uid(aleph_user),
+                "active": self.get_active(aleph_user),
+                "personal": {"preferredContactTypeId": "mail",
+                             "lastName": self.get_names(aleph_user)[0],
+                             "firstName": self.get_names(aleph_user)[1],
+                             "phone": self.get_phone(aleph_user),
+                             "email": self.get_email(aleph_user),
+                             "addresses": list(self.get_addresses(aleph_user))},
+                "expirationDate": self.get_expiration_date(aleph_user)}
 
     def get_group(self, aleph_user):
         z305 = self.get_z305(aleph_user)
-        if 'z305-bor-status' in z305: 
+        if 'z305-bor-status' in z305:
             a_group = z305['z305-bor-status']
         elif 'bor-status' in z305:
             a_group = z305['bor-status']
         else:
             a_group = None
-        return next(g['Folio Code'] for g
-                    in self.groupsmap
-                    if g['ALEPH code'] == a_group)
+        return a_group
 
     def get_email(self, aleph_user):
-        z304 = self.get_z304(aleph_user)
-        if 'z304-email-address' in z304:
-            return z304['z304-email-address']
-        else:
-            print('No email address')
-            return ''
+        z304s= self.get_z304(aleph_user)
+        return next(z304['z304-email-address'] for z304
+                    in z304s
+                    if z304['z304-email-address'])
 
     def get_phone(self, aleph_user):
-        z304 = self.get_z304(aleph_user)
-        if 'z304-telephone' in z304 and z304["z304-telephone"]:
-            return z304["z304-telephone"]
-        elif 'z304-telephone-2' in z304 and z304['z304-telephone-2']:
-            return z304['z304-telephone-2']
+        z304s= self.get_z304(aleph_user)
+        p1 = next((z304['z304-telephone'] for z304 in z304s
+                  if self.get_or_empty(z304, 'z304-telephone')), None)
+        p2 = next((z304['z304-telephone-2'] for z304 in z304s
+                  if self.get_or_empty(z304, 'z304-telephone-2')), None)
+        if p1:
+            return p1
+        elif p2: 
+            return p2
         else:
-            print("Did not find a phone number")
-            return ''
+            raise ValueError('No phones found for {}'
+                            .format(self.get_user_name(aleph_user)))
 
     def get_barcode(self, aleph_user):
         return next(z308["z308-key-data"] for z308
@@ -82,9 +80,25 @@ class Aleph:
                     if z308['z308-key-type'] == '01')
 
     def get_user_name(self, aleph_user):
-        return next(z308["z308-key-data"] for z308
-                    in aleph_user['z308']
-                    if z308['z308-key-type'] == '06')
+        z06 = next((z308["z308-key-data"] for z308
+                         in aleph_user['z308']
+                         if z308['z308-key-type'] == '06'), None)
+        z03 = next((z308["z308-key-data"] for z308
+                         in aleph_user['z308']
+                         if z308['z308-key-type'] == '03'), None)
+        if not z03 and not z06:
+            raise ValueError("no username {}".format(user_name))
+        elif (z03 and z06 and z03 != z06):
+            raise ValueError("03 ({}) and 06 ({}) are NOT same"
+                             .format(z03, z06))
+        elif z03:
+            return z03
+        elif z06: 
+            return z06
+        elif (z03 and z06 and z03 == z06):
+            return z03 
+        else:
+            raise ValueError("SPECIAL CASE: 03: {} 06:{}".format(z03, z06))
 
     def get_ext_uid(self, aleph_user):
         return next(z308["z308-key-data"] for z308
@@ -92,11 +106,9 @@ class Aleph:
                     if z308['z308-key-type'] == '02')
 
     def get_active(self, aleph_user):
-        # ac = all(z308['z308-status'] == 'AC' for z308
-        #         in aleph_user['z308'])
-        # print(ac)
-        # return ac
-        return True
+        ac = all(z308['z308-status'] == 'AC' for z308
+                 in aleph_user['z308'])
+        return ac
 
     def get_names(self, aleph_user):
         names = aleph_user['z303']['z303-name'].split(',', maxsplit=1)
@@ -115,7 +127,7 @@ class Aleph:
             return iter([aleph_user[elem_name]])
 
     def get_z304(self, aleph_user):
-        return next(self.get_elem(aleph_user, 'z304'))
+        return self.get_elem(aleph_user, 'z304')
 
     def get_z305(self, aleph_user):
         z305s = self.get_elem(aleph_user, 'z305')
@@ -124,41 +136,54 @@ class Aleph:
                     if ('z305-sub-library' in z305 and
                         z305['z305-sub-library'] != 'ALEPH'))
 
+    def get_or_empty(self,dictionary, key):
+        return dictionary[key] if key in dictionary else ''
+
     def get_addresses(self, aleph_user):
-        z304 = self.get_z304(aleph_user)
-        line1 = z304["z304-address-1"] if "z304-address-1" in z304 else ''
-        line2 = z304["z304-address-2"] if "z304-address-2" in z304 else ''
-        temp_country = (z304["z304-address-4"] if 'z304-address-4' in z304
-                        else '')
-        # Has country in line 4. Line 3 likely contains a foreign city/state
-        if temp_country:
-            line2 += z304["z304-address-3"]
-            line_to_parse = z304["z304-address-3"]
-        # address 3 has NO US state abbr. must conntain country...
-        elif 'z304-address-3' in z304 and all(' ' + state
-                                              not in z304['z304-address-3']
-                                              for state
-                                              in self.states):
-            temp_country = z304["z304-address-3"]
-            line_to_parse = ''
-        # now, this is likely the state-city part of an US address
-        elif 'z304-address-3' in z304:
-            line_to_parse = z304['z304-address-3']
-            temp_country = 'United States of America (the)'
-        elif 'z304-address-2' in z304:
-            line_to_parse = z304['z304-address-2']
-            temp_country = 'United States of America (the)'
-        else:
-            line_to_parse = ''
-            temp_country = 'United States of America (the)'
-        return {"countryId": self.get_country_id(temp_country),
-                "addressTypeId": "Home",
-                "addressLine1": line1,
-                "addressLine2": line2,
-                "region": self.get_region(line_to_parse),
-                "city": self.get_city(line_to_parse),
-                "primaryAddress": True,
-                "postalCode": self.get_zip(z304)}
+        z304s = self.get_z304(aleph_user)
+        for z304 in z304s:
+            line1 = self.get_or_empty(aleph_user, "z304-address-1")
+            line2 = self.get_or_empty(aleph_user, "z304-address-2")
+            temp_country = self.get_or_empty(aleph_user, "z304-address-4")
+            # Has country in line 4. 
+            # Line 3 likely contains a foreign city/state
+            if temp_country:
+                line2 += z304["z304-address-3"]
+                line_to_parse = z304["z304-address-3"]
+            # address 3 has NO US state abbr. must conntain country...
+            elif 'z304-address-3' in z304 and all(' ' + state
+                                                  not in z304['z304-address-3']
+                                                  for state
+                                                  in self.states):
+                temp_country = z304["z304-address-3"]
+                line_to_parse = ''
+            # now, this is likely the state-city part of an US address
+            elif 'z304-address-3' in z304:
+                line_to_parse = z304['z304-address-3']
+                temp_country = 'United States of America (the)'
+            elif 'z304-address-2' in z304:
+                line_to_parse = z304['z304-address-2']
+                temp_country = 'United States of America (the)'
+            else:
+                line_to_parse = ''
+                temp_country = 'United States of America (the)'
+            addr_type = self.get_or_empty(z304, 'z304-address-type')
+            if addr_type == "02":
+                addr_type_id = "replace with Campus id"
+            elif addr_type == "01":
+                addr_type_id = "replace with Home?/Mailing id"
+            else:
+                raise ValueError("addresstype {} for user {}"
+                                 .format(addr_type,
+                                         self.get_user_name(aleph_user)))
+            yield {"countryId": self.get_country_id(temp_country),
+                   "addressTypeId": addr_type_id,
+                   "addressLine1": line1,
+                   "addressLine2": line2,
+                   "region": self.get_region(line_to_parse),
+                   "city": self.get_city(line_to_parse),
+                   "primaryAddress": addr_type == "02",
+                   "postalCode": self.get_zip(z304)}
 
     def get_country_id(self, country):
         try:
