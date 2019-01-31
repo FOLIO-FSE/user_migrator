@@ -56,9 +56,14 @@ class Aleph:
 
     def get_email(self, aleph_user):
         z304s= self.get_z304(aleph_user)
-        return next(z304['z304-email-address'] for z304
+        email =  next((z304['z304-email-address'] for z304
                     in z304s
-                    if z304['z304-email-address'])
+                    if z304['z304-email-address']), None)
+        if not email:
+            raise ValueError("No email address for {}"
+                             .format(self.get_user_name(aleph_user)))
+        else:
+            return email
 
     def get_phone(self, aleph_user):
         z304s= self.get_z304(aleph_user)
@@ -71,8 +76,9 @@ class Aleph:
         elif p2: 
             return p2
         else:
-            raise ValueError('No phones found for {}'
-                            .format(self.get_user_name(aleph_user)))
+            # raise ValueError('No phones found for {}'
+            #                .format(self.get_user_name(aleph_user)))
+            return ''
 
     def get_barcode(self, aleph_user):
         return next(z308["z308-key-data"] for z308
@@ -137,45 +143,46 @@ class Aleph:
                         z305['z305-sub-library'] != 'ALEPH'))
 
     def get_or_empty(self,dictionary, key):
-        return dictionary[key] if key in dictionary else ''
+        return dictionary[key] if key in dictionary and dictionary[key] else ''
 
     def get_addresses(self, aleph_user):
         z304s = self.get_z304(aleph_user)
-        for z304 in z304s:
-            line1 = self.get_or_empty(aleph_user, "z304-address-1")
-            line2 = self.get_or_empty(aleph_user, "z304-address-2")
-            temp_country = self.get_or_empty(aleph_user, "z304-address-4")
+        for z304 in filter(None ,z304s):
+            line1 = self.get_or_empty(z304, "z304-address-1")
+            line2 = self.get_or_empty(z304, "z304-address-2")
+            line3 = self.get_or_empty(z304, "z304-address-3")
+            temp_country = self.get_or_empty(z304, "z304-address-4")
             # Has country in line 4. 
             # Line 3 likely contains a foreign city/state
             if temp_country:
-                line2 += z304["z304-address-3"]
-                line_to_parse = z304["z304-address-3"]
+                line2 += line3
+                line_to_parse = line3
             # address 3 has NO US state abbr. must conntain country...
-            elif 'z304-address-3' in z304 and all(' ' + state
-                                                  not in z304['z304-address-3']
-                                                  for state
-                                                  in self.states):
-                temp_country = z304["z304-address-3"]
+            elif line3 and all(' ' + s not in line3 for s in self.states):
+                temp_country = line3
                 line_to_parse = ''
             # now, this is likely the state-city part of an US address
-            elif 'z304-address-3' in z304:
-                line_to_parse = z304['z304-address-3']
+            elif line3:
+                line_to_parse = line3
                 temp_country = 'United States of America (the)'
-            elif 'z304-address-2' in z304:
-                line_to_parse = z304['z304-address-2']
+            elif line2:
+                line_to_parse = line2
                 temp_country = 'United States of America (the)'
             else:
                 line_to_parse = ''
                 temp_country = 'United States of America (the)'
             addr_type = self.get_or_empty(z304, 'z304-address-type')
-            if addr_type == "02":
-                addr_type_id = "replace with Campus id"
-            elif addr_type == "01":
-                addr_type_id = "replace with Home?/Mailing id"
+            if addr_type == "02": # Campus
+                addr_type_id = "6057295e-a50b-48b2-a698-dd75fd177da4"
+                zip_code = ''
+            elif addr_type == "01": # Current
+                addr_type_id = "6145a18f-8369-452e-9d89-2f5f5e3ee582"
+                zip_code = self.get_zip(z304, self.get_user_name(aleph_user))
             else:
                 raise ValueError("addresstype {} for user {}"
                                  .format(addr_type,
                                          self.get_user_name(aleph_user)))
+
             yield {"countryId": self.get_country_id(temp_country),
                    "addressTypeId": addr_type_id,
                    "addressLine1": line1,
@@ -183,7 +190,7 @@ class Aleph:
                    "region": self.get_region(line_to_parse),
                    "city": self.get_city(line_to_parse),
                    "primaryAddress": addr_type == "02",
-                   "postalCode": self.get_zip(z304)}
+                   "postalCode": zip_code}
 
     def get_country_id(self, country):
         try:
@@ -209,10 +216,9 @@ class Aleph:
                 if 'PlaceName' in parse[0]
                 else temp_city)
 
-    def get_zip(self, z304):
+    def get_zip(self, z304, user_name):
         if 'z304-zip' in z304:
             return z304['z304-zip']
         else:
-            print('No zip')
-            return ''
+            raise ValueError('No zip for {}'.format(user_name))
     
