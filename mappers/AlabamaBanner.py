@@ -18,21 +18,26 @@ class AlabamaBanner:
 
     def lpos(self, start, end, string):
         return string[int(start-1):int(end)].strip()
+    
+    def validate_phone(self, phone_number):
+        if phone_number == "(   )   -":
+            return ''
+        else:
+            return phone_number
 
     def do_map(self, line):
-        phone1 = self.lpos(776, 800, line),
-        phone2 = self.lpos(1205, 1229, line),
-        mobile1 = self.lpos(801, 825, line),
-        mobile2 = self.lpos(1229, 1253, line),
+        phone1 = self.validate_phone(self.lpos(776, 800, line))
+        phone2 = self.validate_phone(self.lpos(1205, 1229, line))
+        mobile1 = self.validate_phone(self.lpos(801, 825, line))
+        mobile2 = self.validate_phone(self.lpos(1229, 1253, line))
         if self.is_student(line):
             phone = phone1
             mobile = mobile1
         else:
             phone = phone2
             mobile = mobile2
-
         user = {"id": str(uuid.uuid4()),
-                "patronGroup": self.get_group(self.lpos(46, 55, line)),
+                "patronGroup": self.lpos(46, 55, line),
                 "barcode": self.lpos(21, 45, line),
                 "username": self.lpos(1347, 1396, line).split('@')[0],
                 "externalSystemId": self.lpos(239, 268, line),
@@ -41,8 +46,8 @@ class AlabamaBanner:
                              "lastName": self.lpos(311, 340, line),
                              "firstName": self.lpos(341, 360, line),
                              "middleName": self.lpos(361, 380, line),
-                             "phone": phone[0],
-                             "mobilePhone": mobile[0],
+                             "phone": phone,
+                             "mobilePhone": mobile,
                              "email": self.lpos(1347, 1396, line),
                              "addresses": list(self.get_addresses(line))},
                 "expirationDate": self.lpos(189, 198, line).replace('.','-')}
@@ -50,8 +55,8 @@ class AlabamaBanner:
         return user
 
     def is_student(self, line):
-        group = self.get_group(self.lpos(46, 55, line))
-        return (group in ['UNDERGRADUATE', 'GRADUATE'])
+        group = self.lpos(46, 55, line)
+        return (group in ['UNDERGRAD', 'GRADUATE'])
 
     def get_addresses(self, line):
         address_types = dict()
@@ -69,9 +74,8 @@ class AlabamaBanner:
             addr2_is_primary = True
         if addr_type2 == '2' and addr_code_status2 == 'H':
             addr2_is_primary = False
-            addr1_is_primary = True
-        
-        e_temp = 'Badd address type {} for user {}'
+            addr1_is_primary = True 
+        e_temp = 'Bad address type {} for user {}'
         user_id = self.lpos(1347, 1396, line).split('@')[0]
         if addr_type1 not in ['1', '2']:
             raise ValueError(e_temp.format(addr_type1, user_id))
@@ -102,12 +106,9 @@ class AlabamaBanner:
         return [address1, address2]
 
     def get_users(self, source_file):
-        return source_file.readlines()
-
-    def get_group(self, ils_code):
-        return next((g['Folio Code'] for g
-                     in self.groupsmap
-                     if g['ILS code'] == ils_code), 'unmapped')
+        # return source_file.readlines()
+        for cnt, line in enumerate(source_file):
+            yield [line, 0]
 
     def get_barcode(self, user):
         b = self.get_correct_barcode_struct(user)
@@ -133,8 +134,8 @@ class AlabamaBanner:
         elif isinstance(b, (dict,)) and self.bc_is_correct(b['barcode']):
             return b
         else:
-            print(b)
-            return b
+            raise ValueError("unexpected barcode structure for {} \n {}"
+                             .format(self.get_user_name(user), b))
 
     def get_user_name(self, user):
         email = self.get_email(user).split('@')
