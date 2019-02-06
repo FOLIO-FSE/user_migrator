@@ -60,8 +60,8 @@ class AlabamaBanner:
 
     def get_addresses(self, line):
         address_types = dict()
-        address_types['1'] = 'ae749f82-a4ef-47ca-b29c-0a5ad7bbff03'
-        address_types['2'] = '4c53934a-c32b-45a5-8cc0-16fafec19f6c'
+        address_types['1'] = 'Home'
+        address_types['2'] = 'CAMPUS'
         addr_type1 = self.lpos(467, 467, line)
         addr_code_status1 = self.lpos(467, 467, line)
         addr_type2 = self.lpos(896, 896, line)

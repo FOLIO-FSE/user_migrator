@@ -1,6 +1,4 @@
-from itertools import chain
 import json
-import traceback
 import usaddress
 from datetime import datetime
 import uuid
@@ -55,25 +53,27 @@ class Aleph:
         return a_group
 
     def get_email(self, aleph_user):
-        z304s= self.get_z304(aleph_user)
-        email =  next((z304['z304-email-address'] for z304
-                    in z304s
-                    if z304['z304-email-address']), None)
+        z304s = self.get_z304(aleph_user)
+        email = next((z304['z304-email-address'] for z304
+                      in z304s
+                      if z304['z304-email-address']), None)
         if not email:
-            raise ValueError("No email address for {}"
-                             .format(self.get_user_name(aleph_user)))
+            # five collages do not want email failing.
+            # raise ValueError("No email address for {}"
+            #                 .format(self.get_user_name(aleph_user)))
+            return ''
         else:
             return email
 
     def get_phone(self, aleph_user):
-        z304s= self.get_z304(aleph_user)
+        z304s = self.get_z304(aleph_user)
         p1 = next((z304['z304-telephone'] for z304 in z304s
                   if self.get_or_empty(z304, 'z304-telephone')), None)
         p2 = next((z304['z304-telephone-2'] for z304 in z304s
                   if self.get_or_empty(z304, 'z304-telephone-2')), None)
         if p1:
             return p1
-        elif p2: 
+        elif p2:
             return p2
         else:
             # raise ValueError('No phones found for {}'
@@ -87,22 +87,22 @@ class Aleph:
 
     def get_user_name(self, aleph_user):
         z06 = next((z308["z308-key-data"] for z308
-                         in aleph_user['z308']
-                         if z308['z308-key-type'] == '06'), None)
+                    in aleph_user['z308']
+                    if z308['z308-key-type'] == '06'), None)
         z03 = next((z308["z308-key-data"] for z308
-                         in aleph_user['z308']
-                         if z308['z308-key-type'] == '03'), None)
+                    in aleph_user['z308']
+                    if z308['z308-key-type'] == '03'), None)
         if not z03 and not z06:
-            raise ValueError("no username {}".format(user_name))
+            raise ValueError("no username {}".format(''))
         elif (z03 and z06 and z03 != z06):
             raise ValueError("03 ({}) and 06 ({}) are NOT same"
                              .format(z03, z06))
         elif z03:
             return z03
-        elif z06: 
+        elif z06:
             return z06
         elif (z03 and z06 and z03 == z06):
-            return z03 
+            return z03
         else:
             raise ValueError("SPECIAL CASE: 03: {} 06:{}".format(z03, z06))
 
@@ -142,17 +142,17 @@ class Aleph:
                     if ('z305-sub-library' in z305 and
                         z305['z305-sub-library'] != 'ALEPH'))
 
-    def get_or_empty(self,dictionary, key):
+    def get_or_empty(self, dictionary, key):
         return dictionary[key] if key in dictionary and dictionary[key] else ''
 
     def get_addresses(self, aleph_user):
         z304s = self.get_z304(aleph_user)
-        for z304 in filter(None ,z304s):
+        for z304 in filter(None, z304s):
             line1 = self.get_or_empty(z304, "z304-address-1")
             line2 = self.get_or_empty(z304, "z304-address-2")
             line3 = self.get_or_empty(z304, "z304-address-3")
             temp_country = self.get_or_empty(z304, "z304-address-4")
-            # Has country in line 4. 
+            # Has country in line 4.
             # Line 3 likely contains a foreign city/state
             if temp_country:
                 line2 += line3
@@ -172,11 +172,11 @@ class Aleph:
                 line_to_parse = ''
                 temp_country = 'United States of America (the)'
             addr_type = self.get_or_empty(z304, 'z304-address-type')
-            if addr_type == "02": # Campus
-                addr_type_id = "6057295e-a50b-48b2-a698-dd75fd177da4"
+            if addr_type == "02":  # Campus
+                addr_type_id = "Campus"
                 zip_code = ''
-            elif addr_type == "01": # Current
-                addr_type_id = "6145a18f-8369-452e-9d89-2f5f5e3ee582"
+            elif addr_type == "01":  # Current
+                addr_type_id = "Current"
                 zip_code = self.get_zip(z304, self.get_user_name(aleph_user))
             else:
                 raise ValueError("addresstype {} for user {}"
@@ -221,4 +221,3 @@ class Aleph:
             return z304['z304-zip']
         else:
             raise ValueError('No zip for {}'.format(user_name))
-    
