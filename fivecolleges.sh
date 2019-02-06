@@ -2,7 +2,7 @@
 TARGET=$1
 SOURCE=$2
 RES="/md/five_colleges/res/"
-MAP="/md/five_colleges/hampat_user_mapping.tsv"
+MAP="/md/five_colleges/fc_user_mapping.tsv"
 MAPPER="aleph"
 echo "Processing files in $TARGET"
 for i in "$TARGET"/*.json;do
