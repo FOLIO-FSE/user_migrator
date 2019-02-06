@@ -1,4 +1,3 @@
-import dateutil.parser
 from datetime import datetime as dt
 import re
 import uuid
@@ -50,7 +49,9 @@ class Chalmers:
             elif user_json['blockInfo']['code'] != '-':
                 counters['blocked'] += 1
             else:
-                exp_date = dateutil.parser.parse(user_json['expirationDate']) 
+                exp_date = dt.strptime(user_json['expirationDate'], '%y-%m-%d') 
+                print(exp_date)
+                # exp_date = dateutil.parser.parse(user_json['expirationDate']) 
                 if exp_date > dt.now():
                     yield[user_json, counters]
                 else:
