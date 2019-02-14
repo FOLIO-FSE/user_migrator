@@ -17,7 +17,7 @@ class Alabama:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def do_map(self, user):
-        return {"id": str(uuid.uuid4()),
+        user = {"id": str(uuid.uuid4()),
                 "patronGroup": self.get_group(user),
                 "barcode": self.get_barcode(user),
                 "username": self.get_user_name(user),
@@ -30,9 +30,9 @@ class Alabama:
                              "phone": self.get_phone(user, 'Primary'),
                              "mobilePhone": self.get_phone(user, 'Mobile'),
                              "email": self.get_email(user),
-
                              "addresses": list(self.get_addresses(user))},
                 "expirationDate": self.get_expiration_date(user)}
+        return user, self.get_ext_uid(user)
 
     def get_users(self, source_file):
         return json.load(source_file)['patronList']['patron']

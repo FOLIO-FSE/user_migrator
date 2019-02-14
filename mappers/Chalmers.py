@@ -21,19 +21,20 @@ class Chalmers:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def do_map(self, user):
-        return {"id": str(uuid.uuid4()),
-                "patronGroup": str(user['patronType']),
-                "barcode": self.get_barcode(user),
-                "username": self.get_user_name(user),
-                "externalSystemId": self.get_ext_uid(user),
-                "active": self.get_active(user),
-                "personal": {"preferredContactTypeId": "mail",
-                             "lastName": self.get_names(user)[0],
-                             "firstName": self.get_names(user)[1],
-                             "phone": '', # No phones!
-                             "email": self.get_email(user),
-                             "addresses": list(self.get_addresses(user))},
-                "expirationDate": user['expirationDate']}
+        new_user = {"id": str(uuid.uuid4()),
+                     "patronGroup": str(user['patronType']),
+                     "barcode": self.get_barcode(user),
+                     "username": self.get_user_name(user),
+                     "externalSystemId": self.get_ext_uid(user),
+                     "active": self.get_active(user),
+                     "personal": {"preferredContactTypeId": "mail",
+                                  "lastName": self.get_names(user)[0],
+                                  "firstName": self.get_names(user)[1],
+                                  "phone": '',  # No phones!
+                                  "email": self.get_email(user),
+                                  "addresses": list(self.get_addresses(user))},
+                     "expirationDate": user['expirationDate']}
+        return new_user, user['id']
 
     def get_users(self, source_file):
         counters = { 'expired': 0,
@@ -49,8 +50,7 @@ class Chalmers:
             elif user_json['blockInfo']['code'] != '-':
                 counters['blocked'] += 1
             else:
-                exp_date = dt.strptime(user_json['expirationDate'], '%y-%m-%d') 
-                print(exp_date)
+                exp_date = dt.strptime(user_json['expirationDate'], '%Y-%m-%d') 
                 # exp_date = dateutil.parser.parse(user_json['expirationDate']) 
                 if exp_date > dt.now():
                     yield[user_json, counters]

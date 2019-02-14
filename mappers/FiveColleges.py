@@ -7,7 +7,7 @@ import csv
 import io
 
 
-class Aleph:
+class FiveColleges:
 
     states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
               "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
@@ -49,7 +49,8 @@ class Aleph:
         elif 'bor-status' in z305:
             a_group = z305['bor-status']
         else:
-            a_group = None
+            raise ValueError("No group for user {}"
+                             .format(self.get_ext_uid(aleph_user)))
         return a_group
 
     def get_email(self, aleph_user):

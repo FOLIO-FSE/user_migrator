@@ -51,8 +51,7 @@ class AlabamaBanner:
                              "email": self.lpos(1347, 1396, line),
                              "addresses": list(self.get_addresses(line))},
                 "expirationDate": self.lpos(189, 198, line).replace('.','-')}
-
-        return user
+        return user, user['externalSystemId']
 
     def is_student(self, line):
         group = self.lpos(46, 55, line)

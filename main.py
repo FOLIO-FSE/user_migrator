@@ -4,7 +4,7 @@ import itertools
 import csv
 import json
 import argparse
-from mappers.Aleph import Aleph
+from mappers.FiveColleges import FiveColleges
 from mappers.Alabama import Alabama
 from mappers.AlabamaBanner import AlabamaBanner
 from mappers.Chalmers import Chalmers
@@ -12,27 +12,29 @@ from mappers.Chalmers import Chalmers
 
 def get_mapper(mapperName, config):
     return {
-        'alabama': Alabama(config),
-        'alabama_banner': AlabamaBanner(config),
-        'aleph': Aleph(config),
-        'chalmers': Chalmers(config)
-    }[mapperName]
+        'alabama': Alabama,
+        'alabama_banner': AlabamaBanner,
+        'five_colleges': FiveCollages,
+        'chalmers': Chalmers
+    }[mapperName](config)
 
 
 def chunks(myList, size):
-     iterator = iter(myList)
-     for first in iterator:
-         yield itertools.chain([first], itertools.islice(iterator, size - 1))
+    iterator = iter(myList)
+    for first in iterator:
+        yield itertools.chain([first], itertools.islice(iterator, size - 1))
 
 
 def map_user_group(groups_map, user):
     folio_group = next((g['Folio Code'] for g
-                 in groups_map
-                 if g['ILS code'] == user['patronGroup']), 'unmapped')
+                        in groups_map
+                        if g['ILS code'] == user['patronGroup']), 'unmapped')
     if folio_group == 'unmapped':
         raise ValueError("source patron group error: {} for {}"
                          .format(user['patronGroup'], user['id']))
-    return folio_group
+    else:
+        return folio_group
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("source_path",
@@ -45,8 +47,10 @@ parser.add_argument("mapper",
                     help="which mapper to use")
 parser.add_argument("source_name",
                     help="source name")
+parser.add_argument("id_map_path",
+                    help="Where to save user id mappings file")
 args = parser.parse_args()
-
+id_map = {}
 with open(args.groups_map_path, 'r') as groups_map_file:
     groups_map = list(csv.DictReader(groups_map_file))
     config = {"groupsmap": groups_map}
@@ -57,7 +61,7 @@ with open(args.groups_map_path, 'r') as groups_map_file:
                      "updateOnlyPresentFields": False,
                      "totalRecords": 0}
     with open(args.source_path, 'r') as source_file:
-        file_name = os.path.basename(source_file.name).replace('.json','')
+        file_name = os.path.basename(source_file.name).replace('.json', '')
         total_users = 0
         i = 0
         failed_users = 0
@@ -70,8 +74,17 @@ with open(args.groups_map_path, 'r') as groups_map_file:
             for user_json in chunk:
                 try:
                     total_users += 1
-                    user = mapper.do_map(user_json[0])
+                    user, old_id = mapper.do_map(user_json[0])
                     patron_group = map_user_group(groups_map, user)
+                    if old_id not in id_map:
+                        map_struct = {
+                            'id': user['id']
+                            'patron_type_id': patron_group
+                        }
+                        id_map[old_id] = map_struct
+                    else:
+                        raise ValueError("Duplicate user id for {}"
+                                         .format(old_id))
                     # patron group is mapped and set
                     if patron_group != '':
                         user['patronGroup'] = patron_group
@@ -87,11 +100,13 @@ with open(args.groups_map_path, 'r') as groups_map_file:
                     print(user_json)
                     print(str(rle))
             path = "{}{}_{}_{}.json".format(args.result_path,
-                                           args.source_name,
-                                           file_name,
-                                           str(i))
+                                            args.source_name,
+                                            file_name,
+                                            str(i))
             with open(path, 'w+') as results_file:
                 results_file.write(json.dumps(import_struct, indent=4))
+        with open(args.id_map_path, 'w+') as id_map_file:
+            id_map_file.write(json.dumps(id_map, indent=4))
         print("Number of failed users:\t{} out of {} in total"
               .format(failed_users, total_users))
         print(last_counter)
