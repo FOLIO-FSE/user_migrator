@@ -9,7 +9,6 @@ import json
 
 class Chalmers:
     # TODO:Bring over number of loans
-    # TODO: map  varfields e to CID
     # (fixed fields 50) and sum them up.
 
     def __init__(self, config):
@@ -185,11 +184,11 @@ class Chalmers:
                 return [adr_home, adr_inst]
 
     def parse_address(self, address):
-        ls = address['lines']
+        lines = address['lines']
         return {"countryId": '',
                 "addressTypeId": '',
-                "addressLine1": ls[0] if ls else '',
-                "addressLine2": ' '.join(ls[1:]) if len(ls) > 1 else '',
+                "addressLine1": lines[0] if lines else '',
+                "addressLine2": ' '.join(lines[1:]) if len(lines) > 1 else '',
                 "region": '',
                 "city": '',
                 "primaryAddress": '',
