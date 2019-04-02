@@ -1,0 +1,244 @@
+{
+    "id": 1012000,
+    "updatedDate": "2016-01-13T15:08:13Z",
+    "createdDate": "1999-10-27T19:44:00Z",
+    "deleted": false,
+    "suppressed": false,
+    "names": [
+        "Leif Långsynt"
+    ],
+    "barcodes": [
+        "0000000000"
+    ],
+    "expirationDate": "2015-01-31",
+    "emails": [
+        "someone@chalmers.se"
+    ],
+    "patronType": 50,
+    "patronCodes": {
+        "pcode1": "-",
+        "pcode2": "-",
+        "pcode3": 90,
+        "pcode4": 0
+    },
+    "homeLibraryCode": "hbib",
+    "message": {
+        "code": " "
+    },
+    "blockInfo": {
+        "code": "-"
+    },
+    "addresses": [
+        {
+            "lines": [
+                "Gatan 9",
+                "410 00 Göteborg",
+                "Intern: Operations Management, Teknikens ekonomi och organisation"
+            ],
+            "type": "a"
+        }
+    ],
+    "phones": [
+        {
+            "number": "0771757575",
+            "type": "p"
+        },
+        {
+            "number": "90510",
+            "type": "t"
+        }
+    ],
+    "uniqueIds": [
+        "1011125050"
+    ],
+    "moneyOwed": 0,
+    "pMessage": " ",
+    "fixedFields": {
+        "43": {
+            "label": "EXP DATE",
+            "value": "2015-01-31T03:00:00Z"
+        },
+        "44": {
+            "label": "PCODE1",
+            "value": "-"
+        },
+        "45": {
+            "label": "PCODE2",
+            "value": "-"
+        },
+        "46": {
+            "label": "PCODE3",
+            "value": "90"
+        },
+        "47": {
+            "label": "P TYPE",
+            "value": "50"
+        },
+        "48": {
+            "label": "TOT CHKOUT",
+            "value": "2"
+        },
+        "49": {
+            "label": "TOT RENWAL",
+            "value": "0"
+        },
+        "50": {
+            "label": "CUR CHKOUT",
+            "value": "0"
+        },
+        "53": {
+            "label": "HOME LIBR",
+            "value": "hbib "
+        },
+        "54": {
+            "label": "PMESSAGE",
+            "value": " "
+        },
+        "55": {
+            "label": "HLODUES",
+            "value": "0"
+        },
+        "56": {
+            "label": "MBLOCK",
+            "value": "-"
+        },
+        "80": {
+            "label": "REC TYPE",
+            "value": "p"
+        },
+        "81": {
+            "label": "RECORD #",
+            "value": "1002000"
+        },
+        "83": {
+            "label": "CREATED",
+            "value": "1999-10-27T19:44:00Z"
+        },
+        "84": {
+            "label": "UPDATED",
+            "value": "2016-01-13T15:08:13Z"
+        },
+        "85": {
+            "label": "REVISIONS",
+            "value": "91"
+        },
+        "86": {
+            "label": "AGENCY",
+            "value": "1"
+        },
+        "95": {
+            "label": "CL RTRND",
+            "value": "0"
+        },
+        "96": {
+            "label": "MONEY OWED",
+            "value": "0.000000"
+        },
+        "98": {
+            "label": "PDATE",
+            "value": "2014-01-22T12:33:41Z"
+        },
+        "99": {
+            "label": "FIRM",
+            "value": "     "
+        },
+        "102": {
+            "label": "CUR ITEMA",
+            "value": "0"
+        },
+        "103": {
+            "label": "CUR ITEMB",
+            "value": "0"
+        },
+        "104": {
+            "label": "PIUSE",
+            "value": "0"
+        },
+        "105": {
+            "label": "OD PENALTY",
+            "value": "0"
+        },
+        "122": {
+            "label": "ILL REQUES",
+            "value": "19"
+        },
+        "123": {
+            "label": "DEBIT BAL",
+            "value": "0.000000"
+        },
+        "124": {
+            "label": "CUR ITEMC",
+            "value": "0"
+        },
+        "125": {
+            "label": "CUR ITEMD",
+            "value": "0"
+        },
+        "126": {
+            "label": "PCODE4",
+            "value": "0"
+        },
+        "158": {
+            "label": "PAT AGENCY",
+            "value": "0"
+        },
+        "263": {
+            "label": "LANG PREF",
+            "value": "   "
+        },
+        "268": {
+            "label": "Notice Preference",
+            "value": "-"
+        },
+        "269": {
+            "label": "Registrations on Record",
+            "value": "0"
+        },
+        "270": {
+            "label": "Total Registrations",
+            "value": "0"
+        },
+        "271": {
+            "label": "Total Programs Attended",
+            "value": "0"
+        },
+        "297": {
+            "label": "Waitlists on Record",
+            "value": "0"
+        }
+    },
+    "varFields": [
+        {
+            "fieldTag": "b",
+            "content": "00000000000"
+        },
+        {
+            "fieldTag": "u",
+            "content": "1011125050"
+        },
+        {
+            "fieldTag": "x",
+            "content": "Hittades ej i PDB 140122. Ptyp ändras från 10 till 50. /EG"
+        },
+        {
+            "fieldTag": "z",
+            "content": "someone@chalmers.se"
+        },
+        {
+            "fieldTag": "a",
+            "content": "Gatan gatan 10$Intern: Operations Management, Teknikens ekonomi och organisation"
+        },
+        {
+            "fieldTag": "n",
+            "content": "Leif Långsynt"
+        },
+        {
+            "fieldTag": "t",
+            "content": "5121"
+        },
+        {
+            "fieldTag": "p",
+            "content": "0771757575"
+        }
+    ]
+}
