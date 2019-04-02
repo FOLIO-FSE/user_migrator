@@ -68,7 +68,7 @@ class Chalmers:
                     counters['expired'] += 1
 
     def get_email(self, user):
-        if not 'emails' in user:
+        if 'emails' not in user:
             raise ValueError("No emails attribute for {}".format(user['id']))
         elif len(user['emails']) > 1:
             raise ValueError("Too many emails for {}".format(user['id']))
@@ -124,7 +124,11 @@ class Chalmers:
         if user['patronType'] in [10, 11, 19, 20, 30]:
             # User is chalmers affiliated and should use CID
             if not cid:
-                raise ValueError("no cid for {}".format(user['id']))
+                if user['patronType'] in [10, 11, 20]:
+                    raise ValueError("No cid, and patronType is {}. Skipping"
+                                     .format(user['patronType']))
+                else:
+                    raise ValueError("Error! No cid for {}".format(user['id']))
             return cid
         elif user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
             # User is library and should use library code
