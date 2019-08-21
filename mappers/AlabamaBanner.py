@@ -1,12 +1,12 @@
-import re
-import uuid
-import requests
 import csv
 import io
+import re
+import uuid
+
+import requests
 
 
 class AlabamaBanner:
-
 
     def __init__(self, config):
         self.groupsmap = config["groupsmap"]
@@ -18,7 +18,7 @@ class AlabamaBanner:
 
     def lpos(self, start, end, string):
         return string[int(start-1):int(end)].strip()
-    
+
     def validate_phone(self, phone_number):
         if phone_number == "(   )   -":
             return ''
@@ -50,7 +50,7 @@ class AlabamaBanner:
                              "mobilePhone": mobile,
                              "email": self.lpos(1347, 1396, line),
                              "addresses": list(self.get_addresses(line))},
-                "expirationDate": self.lpos(189, 198, line).replace('.','-')}
+                "expirationDate": self.lpos(189, 198, line).replace('.', '-')}
         return user, user['externalSystemId']
 
     def is_student(self, line):
@@ -73,7 +73,7 @@ class AlabamaBanner:
             addr2_is_primary = True
         if addr_type2 == '2' and addr_code_status2 == 'H':
             addr2_is_primary = False
-            addr1_is_primary = True 
+            addr1_is_primary = True
         e_temp = 'Bad address type {} for user {}'
         user_id = self.lpos(1347, 1396, line).split('@')[0]
         if addr_type1 not in ['1', '2']:
@@ -85,10 +85,13 @@ class AlabamaBanner:
                     "addressTypeId": address_types[addr_type1],
                     "addressLine1": self.lpos(489, 538, line),
                     "addressLine2": "\n".join(filter(None, [self.lpos(539, 538, line),
-                                               self.lpos(539, 578, line),
-                                               self.lpos(579, 618, line),
-                                               self.lpos(619, 658, line),
-                                               self.lpos(659, 698, line)])),
+                                                            self.lpos(
+                                                                539, 578, line),
+                                                            self.lpos(
+                                                                579, 618, line),
+                                                            self.lpos(
+                                                                619, 658, line),
+                                                            self.lpos(659, 698, line)])),
                     "region": self.lpos(739, 745, line),
                     "city": self.lpos(699, 738, line),
                     "primaryAddress": addr1_is_primary,
@@ -97,7 +100,7 @@ class AlabamaBanner:
                     "addressTypeId": address_types[addr_type2],
                     "addressLine1": self.lpos(918, 967, line),
                     "addressLine2": "\n".join(filter(None, [self.lpos(968, 1007, line),
-                                               self.lpos(1008, 1127, line)])),
+                                                            self.lpos(1008, 1127, line)])),
                     "region": self.lpos(1168, 1174, line),
                     "city": self.lpos(1128, 1167, line),
                     "primaryAddress": addr2_is_primary,

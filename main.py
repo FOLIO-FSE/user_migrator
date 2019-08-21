@@ -11,6 +11,14 @@ from mappers.Chalmers import Chalmers
 from mappers.FiveColleges import FiveColleges
 
 
+def dupe_id_check(id_map, user_id, id_to_add, type_string):
+    if id_to_add not in id_map:
+        id_map[id_to_add] = user_id
+    else:
+        raise ValueError("Duplicate {} ({}) for {}"
+                            .format(type_string, id_to_add, user_id))
+
+
 def get_mapper(mapperName, config):
     return {
         'alabama': Alabama,
@@ -53,11 +61,19 @@ def main():
                         help="Where to save user id mappings file")
     args = parser.parse_args()
     id_map = {}
-    groups_path = args.groups_map_path + '/user_groups.tsv'
+    barcode_map = {}
+    username_map = {}
+    external_user_id_map = {}
+    groups_path = args.groups_map_path
+    print('getting user group mappings from {}'.format(groups_path))
+    print('saving results to {}'.format(args.result_path))
     with open(groups_path, 'r') as groups_map_file:
         groups_map = list(csv.DictReader(groups_map_file, delimiter='\t'))
+        print('Number of groups to map: {}'.format(len(groups_map)))
         config = {"groupsmap": groups_map}
         mapper = get_mapper(args.mapper, config)
+        folio_users_per_group = {}
+        sierra_users_per_group = {}
         import_struct = {"source_type": args.source_name,
                          "deactivateMissingUsers": False,
                          "users": [],
@@ -75,20 +91,30 @@ def main():
                 i += 1
                 import_struct["users"] = []
                 for user_json in chunk:
-                    try:
-                        total_users += 1
+                    total_users += 1
+                    if user_json[0]['patronType'] not in sierra_users_per_group:
+                        sierra_users_per_group[user_json[0]['patronType']] = 1
+                    else:
+                        sierra_users_per_group[user_json[0]['patronType']] += 1
+                    try:                                          
                         user, old_id = mapper.do_map(user_json[0])
                         patron_group = map_user_group(groups_map, user)
+                        if patron_group not in folio_users_per_group:
+                            folio_users_per_group[patron_group] = 1
+                        else:
+                            folio_users_per_group[patron_group] += 1
                         if old_id not in id_map:
-                            map_struct = {
+                            id_map[old_id] = {
                                 'id': user['id'],
                                 'patron_type_id': patron_group
                             }
-                            id_map[old_id] = map_struct
                         else:
                             raise ValueError("Duplicate user id for {}"
                                              .format(old_id))
                         # patron group is mapped and set
+                        dupe_id_check(barcode_map, old_id, user['barcode'], 'barcode')
+                        dupe_id_check(external_user_id_map, old_id, user['externalSystemId'], 'externalSystemId')
+                        dupe_id_check(username_map, old_id, user['username'], 'username')
                         if patron_group != '':
                             user['patronGroup'] = patron_group
                             import_struct["users"].append(user)
@@ -110,9 +136,11 @@ def main():
                     results_file.write(json.dumps(import_struct, indent=4))
             with open(args.id_map_path, 'w+') as id_map_file:
                 id_map_file.write(json.dumps(id_map, indent=4))
-            print("Number of failed users:\t{} out of {} in total"
+            print("Number of failed users:\t{} out of {} processed users in total after filtering."
                   .format(failed_users, total_users))
             print(last_counter)
+            print(sierra_users_per_group)
+            print(folio_users_per_group)
 
 
 if __name__ == '__main__':

@@ -21,9 +21,6 @@ class Chalmers:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
 
     def do_map(self, user):
-        adr = self.get_addresses(user)
-        if not any(filter(None, adr)):
-            raise ValueError("No address for\n{}".format(user))
         new_user = {"id": str(uuid.uuid4()),
                     "patronGroup": str(user['patronType']),
                     "barcode": self.get_barcode(user),
@@ -34,9 +31,12 @@ class Chalmers:
                                  "lastName": self.get_names(user)[0],
                                  "firstName": self.get_names(user)[1],
                                  "phone": '',  # No phones!
-                                 "email": self.get_email(user),
+                                # "email": self.get_email(user),
+                                 "email": 'ttolstoy@ebsco.com',
                                  "addresses": self.get_addresses(user)},
                     "expirationDate": user['expirationDate']}
+        if not new_user['personal']["addresses"]:
+            del new_user['personal']["addresses"]
         return new_user, user['id']
 
     def get_users(self, source_file):
@@ -45,8 +45,10 @@ class Chalmers:
                     'blocked': 0,
                     'deleted': 0,
                     'illLibs': 0,
-                    'pMessage': 0}
+                    'pMessage': 0,
+                    'total2': 0}
         for line in source_file:
+            counters['total2'] += 1
             user_json = json.loads(line)
             if user_json['deleted'] is True:
                 counters['deleted'] += 1
@@ -56,9 +58,6 @@ class Chalmers:
                 counters['blocked'] += 1
             elif user_json['pMessage'].strip() != '':
                 counters['pMessage'] += 1
-            elif str(user_json['patronType']) in ['110', '120',
-                                                  '130', '140', '150']:
-                counters['illLibs'] += 1
             else:
                 exp_date = dt.strptime(user_json['expirationDate'], '%Y-%m-%d')
                 if exp_date > dt.now():
@@ -123,18 +122,22 @@ class Chalmers:
         if user['patronType'] in [10, 11, 19, 20, 30]:
             # User is chalmers affiliated and should use CID
             if not cid:
-                if user['patronType'] in [10, 11, 20]:
-                    raise ValueError("No cid, and patronType is {}. Skipping"
-                                     .format(user['patronType']))
+                if user['patronType'] in [10, 11, 19, 20]:
+                    raise ValueError("No cid for user {}, and patronType is {}. Skipping"
+                                     .format(user['id'], user['patronType']))
                 else:
-                    raise ValueError("Error! No cid for {}".format(user['id']))
-            return cid
+                    print("GU-student {} utan CID. TIlldelar barcode".format(user['id']))
+                    return self.get_barcode(user)
+            return cid+ '@chalmers.se'
         elif user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
             # User is library and should use library code
+            barcode = self.get_barcode(user)
+            print("PUBLIC LIBRARY: {}".format(barcode))
             print(user)
+            return barcode
         elif user['patronType'] in [30, 50, 60]:
-            # User is considered member of public. Personnummer.
-            return self.get_personnummer(user)
+            # User is considered member of public. Barcode.
+            return self.get_barcode(user)
         else:
             raise ValueError("Unhandled patronType {} for {}"
                              .format(user['patronType'], user['id']))
@@ -158,30 +161,31 @@ class Chalmers:
         return user['expirationDate']
 
     def get_addresses(self, user):
+        # TODO: For organizations, add institution as address type
         # TODO: map addresses better
-        home_id = 'Hemadress'
-        inst_id = 'Institution'
-        if 'addresses' not in user:
-            raise ValueError("no addresses attrib for {}".format(user['id']))
-        num_adr = len(user['addresses'])
-        if num_adr == 0:
-            raise ValueError("0 addresses for {}".format(user['id']))
-        elif num_adr > 2:
-            raise ValueError("Too many addresses for {}".format(user['id']))
-        else:
-            if num_adr == 1:
-                adr = self.parse_address(user['addresses'][0])
-                adr['addressTypeId'] = home_id
-                adr['primaryAddress'] = True
-                return [adr]
-            elif num_adr == 2:
-                adr_home = self.parse_address(user['addresses'][0])
-                adr_home['addressTypeId'] = home_id
-                adr_home['primaryAddress'] = False
-                adr_inst = self.parse_address(user['addresses'][1])
-                adr_inst['addressTypeId'] = inst_id
-                adr_inst['primaryAddress'] = True
-                return [adr_home, adr_inst]
+        if user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
+            inst_id = 'Library address'
+            if 'addresses' not in user:
+                raise ValueError("no addresses attrib for {}".format(user['id']))
+            num_adr = len(user['addresses'])
+            if num_adr == 0:
+                raise ValueError("0 addresses for {}".format(user['id']))
+            elif num_adr > 2:
+                raise ValueError("Too many addresses for {}".format(user['id']))
+            else:
+                if num_adr == 1:
+                    adr = self.parse_address(user['addresses'][0])
+                    adr['addressTypeId'] = inst_id
+                    adr['primaryAddress'] = True
+                    return [adr]
+                elif num_adr == 2:
+                    adr_home = self.parse_address(user['addresses'][0])
+                    adr_home['addressTypeId'] = inst_id
+                    adr_home['primaryAddress'] = False
+                    adr_inst = self.parse_address(user['addresses'][1])
+                    adr_inst['addressTypeId'] = inst_id
+                    adr_inst['primaryAddress'] = True
+                    return [adr_home, adr_inst]
 
     def parse_address(self, address):
         lines = address['lines']
