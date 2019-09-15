@@ -1,4 +1,5 @@
 from datetime import datetime as dt
+import datetime
 import re
 import uuid
 import requests
@@ -19,6 +20,23 @@ class Chalmers:
                              "country-codes.csv")
         req = requests.get(country_codes_url)
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
+        self.counters = {
+            'expired': 0,
+            'suppressed': 0,
+            'blocked': 0,
+            'deleted': 0,
+            'illLibs': 0,
+            'pMessage': {},
+            'pMessage_count': 0,
+            'missing_personnummer': 0,
+            'no_emails': 0,
+            'invalid_email': 0,
+            'more_than_one_emails': 0,
+            'too_many_personnummer': 0,
+            'incorrect_personnummer': 0,
+            'total2': 0,
+            'missing_cid': 0
+        }
 
     def do_map(self, user):
         new_user = {"id": str(uuid.uuid4()),
@@ -40,42 +58,49 @@ class Chalmers:
         return new_user, user['id']
 
     def get_users(self, source_file):
-        counters = {'expired': 0,
-                    'suppressed': 0,
-                    'blocked': 0,
-                    'deleted': 0,
-                    'illLibs': 0,
-                    'pMessage': 0,
-                    'total2': 0}
         for line in source_file:
-            counters['total2'] += 1
-            user_json = json.loads(line)
-            if user_json['deleted'] is True:
-                counters['deleted'] += 1
-            elif user_json['suppressed'] is True:
-                counters['suppressed'] += 1
-            elif user_json['blockInfo']['code'] != '-':
-                counters['blocked'] += 1
-            elif user_json['pMessage'].strip() != '':
-                counters['pMessage'] += 1
-            else:
-                exp_date = dt.strptime(user_json['expirationDate'], '%Y-%m-%d')
-                if exp_date > dt.now():
-                    yield[user_json, counters]
+            self.counters['total2'] += 1
+            try:
+                user_json = json.loads(line)
+                # if user_json['id'] in ['1021461','1023445', '1132876']:
+                #    print(user_json)
+                if user_json['deleted'] is True:
+                    self.counters['deleted'] += 1
+                elif user_json['suppressed'] is True:
+                    self.counters['suppressed'] += 1
+                elif user_json['blockInfo']['code'] != '-':
+                    self.counters['blocked'] += 1
                 else:
-                    counters['expired'] += 1
+                    if user_json['pMessage'].strip() != '':
+                        self.counters['pMessage_count'] += 1
+                        if user_json['pMessage'] not in self.counters['pMessage']:
+                            self.counters['pMessage'][user_json['pMessage']] = 1
+                        else:
+                            self.counters['pMessage'][user_json['pMessage']] += 1
+                    exp_date = dt.strptime(user_json['expirationDate'], '%Y-%m-%d')
+                    if exp_date > dt.now():
+                        yield[user_json, self.counters]
+                    else:
+                        self.counters['expired'] += 1
+            except Exception as ee:
+                print(ee)
+                print(line)
 
     def get_email(self, user):
         if 'emails' not in user:
+            self.counters['no_emails'] +=1
             raise ValueError("No emails attribute for {}".format(user['id']))
         elif len(user['emails']) > 1:
+            self.counters['more_than_one_emails'] +=1
             raise ValueError("Too many emails for {}".format(user['id']))
         elif not user['emails']:
+            self.counters['no_emails'] +=1
             raise ValueError("Zero emails for {}".format(user['id']))
         else:
             eml = user['emails'][0]
             reg = r"[^@]+@[^@]+\.[^@]+"
             if not re.match(reg, eml):
+                self.counters['invalid_email'] +=1
                 raise ValueError("email likely invalid {} for user {}"
                                  .format(eml, user['id']))
             else:
@@ -90,18 +115,25 @@ class Chalmers:
                 raise ValueError("Zero barcodes for {}"
                                  .format(user['id']))
             else:
-                return user['barcodes'][0]
+                return user['barcodes'][0].lower()
         else:
             raise ValueError("No barcodes for  {}".format(user['id']))
 
     def get_personnummer(self, user):
-        if 'uniqueIds' not in user:
+        # Public library
+        if user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
+            return self.get_barcode(user)
+        # All other users
+        elif 'uniqueIds' not in user:
+            self.counters['missing_personnummer'] +=1
             raise ValueError("no uniqueIds attrib for {}"
                              .format(user['id']))
         elif len(user['uniqueIds']) > 1:
+            self.counters['too_many_personnummer'] +=1
             raise ValueError("Too many unique ids for {}"
                              .format(user['id']))
         elif not user['uniqueIds']:
+            self.counters['missing_personnummer'] +=1
             raise ValueError("Zero uniqueIds for {}"
                              .format(user['id']))
         else:
@@ -110,6 +142,13 @@ class Chalmers:
                 # print(uid)
                 return uid
             else:
+                created_date = dt.strptime(user['createdDate'], '%Y-%m-%dT%H:%M:%SZ')
+                months_back = (dt.now() - datetime.timedelta(6 * 365 / 12))
+                print("Recently added {} patron with invalid swedish personnummer. Adding despite malformed uniqueid {}".format(created_date, uid))
+                # recent user without swedish personnummer
+                if created_date < months_back:
+                    return uid
+                self.counters['incorrect_personnummer'] +=1
                 raise ValueError("Incorrect personnummer ({}) for user {}?"
                                  .format(uid, user['id']))
 
@@ -122,6 +161,7 @@ class Chalmers:
         if user['patronType'] in [10, 11, 19, 20, 30]:
             # User is chalmers affiliated and should use CID
             if not cid:
+                self.counters['missing_cid'] += 1
                 if user['patronType'] in [10, 11, 19, 20]:
                     raise ValueError("No cid for user {}, and patronType is {}. Skipping"
                                      .format(user['id'], user['patronType']))
@@ -130,14 +170,12 @@ class Chalmers:
                     return self.get_barcode(user)
             return cid+ '@chalmers.se'
         elif user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
-            # User is library and should use library code
             barcode = self.get_barcode(user)
-            print("PUBLIC LIBRARY: {}".format(barcode))
-            print(user)
+            # print("PUBLIC LIBRARY: {} of type{}".format(barcode, user['patronType']))
             return barcode
         elif user['patronType'] in [30, 50, 60]:
             # User is considered member of public. Barcode.
-            return self.get_barcode(user)
+            return self.get_personnummer(user)
         else:
             raise ValueError("Unhandled patronType {} for {}"
                              .format(user['patronType'], user['id']))
@@ -153,7 +191,9 @@ class Chalmers:
         elif not user['names']:
             raise ValueError("Zero names for {}".format(user['id']))
         elif ', ' not in user['names'][0]:
-            raise ValueError("No comma in name for {}".format(user['id']))
+            if user['patronType'] not in [110, 120, 130, 140, 150, 200, 201]:
+                raise ValueError("No comma in name for {}".format(user['id']))
+            return [user['names'][0], '']
         else:
             return user['names'][0].split(', ')
 
