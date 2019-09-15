@@ -4,7 +4,10 @@ import itertools
 import json
 import os
 
+import requests
 import usaddress
+
+from jsonschema import ValidationError, validate
 from mappers.Alabama import Alabama
 from mappers.AlabamaBanner import AlabamaBanner
 from mappers.Chalmers import Chalmers
@@ -26,6 +29,12 @@ def get_mapper(mapperName, config):
         'five_colleges': FiveColleges,
         'chalmers': Chalmers
     }[mapperName](config)
+
+
+def get_user_schema():
+    schema_location = 'https://raw.githubusercontent.com/folio-org/mod-users/master/ramls/userdata.json'
+    req = requests.get(schema_location)
+    return json.loads(req.text)
 
 
 def make_chunks(my_list, size):
@@ -60,6 +69,7 @@ def main():
     parser.add_argument("id_map_path",
                         help="Where to save user id mappings file")
     args = parser.parse_args()
+    user_schema = get_user_schema()
     id_map = {}
     barcode_map = {}
     username_map = {}
@@ -91,14 +101,16 @@ def main():
                 i += 1
                 import_struct["users"] = []
                 for user_json in chunk:
+                    old_id = user_json[0]['id']
                     total_users += 1
                     if user_json[0]['patronType'] not in sierra_users_per_group:
                         sierra_users_per_group[user_json[0]['patronType']] = 1
                     else:
                         sierra_users_per_group[user_json[0]['patronType']] += 1
-                    try:                                          
+                    try:
                         user, old_id = mapper.do_map(user_json[0])
                         patron_group = map_user_group(groups_map, user)
+                        validate(user, user_schema)
                         if patron_group not in folio_users_per_group:
                             folio_users_per_group[patron_group] = 1
                         else:
@@ -121,9 +133,13 @@ def main():
                         last_counter = user_json[1]
                         import_struct["totalRecords"] = len(import_struct["users"])
                     except ValueError as value_error:
+                        if old_id and old_id in id_map:
+                            del id_map[old_id]
                         failed_users += 1
                         print(str(value_error))
                     except usaddress.RepeatedLabelError as rle:
+                        if old_id and old_id in id_map:
+                            del id_map[old_id]
                         failed_users += 1
                         print("Failed parsing address for user")
                         print(user_json)
@@ -136,11 +152,13 @@ def main():
                     results_file.write(json.dumps(import_struct, indent=4))
             with open(args.id_map_path, 'w+') as id_map_file:
                 id_map_file.write(json.dumps(id_map, indent=4))
+            print('III Users per group')
+            print(json.dumps(sierra_users_per_group, sort_keys=True, indent=4))
+            print('FOLIO Users per group')
+            print(json.dumps(folio_users_per_group, sort_keys=True, indent=4))  
             print("Number of failed users:\t{} out of {} processed users in total after filtering."
                   .format(failed_users, total_users))
-            print(last_counter)
-            print(sierra_users_per_group)
-            print(folio_users_per_group)
+            print(json.dumps(last_counter, sort_keys=True, indent=4))
 
 
 if __name__ == '__main__':
