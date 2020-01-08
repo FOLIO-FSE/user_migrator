@@ -48,7 +48,7 @@ class AlabamaBanner:
                              "middleName": self.lpos(361, 380, line),
                              "phone": phone,
                              "mobilePhone": mobile,
-                             "email": self.lpos(1347, 1396, line),
+                             "email": "folio@ua.edu", # self.lpos(1347, 1396, line),
                              "addresses": list(self.get_addresses(line))},
                 "expirationDate": self.lpos(189, 198, line).replace('.', '-')}
         return user, user['externalSystemId']

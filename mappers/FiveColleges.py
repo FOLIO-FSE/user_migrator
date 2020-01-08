@@ -38,7 +38,7 @@ class FiveColleges:
                              "lastName": self.get_names(aleph_user)[0],
                              "firstName": self.get_names(aleph_user)[1],
                              "phone": self.get_phone(aleph_user),
-                             "email": self.get_email(aleph_user),
+                             "email": "aarnold@ebsco.com", # self.get_email(aleph_user),
                              "addresses": list(self.get_addresses(aleph_user))},
                 "expirationDate": self.get_expiration_date(aleph_user)}
 

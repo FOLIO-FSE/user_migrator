@@ -22,6 +22,8 @@ class Chalmers:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
         self.counters = {
             'expired': 0,
+            'tot_checkedout': 0,
+            'successful_checkedout': 0,
             'suppressed': 0,
             'blocked': 0,
             'deleted': 0,
@@ -29,39 +31,45 @@ class Chalmers:
             'pMessage': {},
             'pMessage_count': 0,
             'missing_personnummer': 0,
+            'incorrect_personnummer_recent': 0,
             'no_emails': 0,
             'invalid_email': 0,
             'more_than_one_emails': 0,
             'too_many_personnummer': 0,
             'incorrect_personnummer': 0,
             'total2': 0,
-            'missing_cid': 0
+            "incorrect_personnummer_checkouts": 0,
+            'missing_cid': 0,
+            'incorrect_cid_checkouts': 0
         }
 
     def do_map(self, user):
+        checked_out = self.get_current_checked_out(user)
+        self.counters['tot_checkedout'] += checked_out
         new_user = {"id": str(uuid.uuid4()),
                     "patronGroup": str(user['patronType']),
-                    "barcode": self.get_barcode(user),
-                    "username": self.get_user_name(user),
-                    "externalSystemId": self.get_ext_uid(user),
+                    "barcode": re.sub('\s+', '', self.get_barcode(user)).strip(),
+                    "username": re.sub('\s+', '', self.get_user_name(user)).strip(),
+                    "externalSystemId": re.sub('\s+', '', self.get_ext_uid(user)).strip(),
                     "active": self.get_active(user),
-                    "personal": {"preferredContactTypeId": "mail",
+                    "personal": {"preferredContactTypeId": "email",
                                  "lastName": self.get_names(user)[0],
                                  "firstName": self.get_names(user)[1],
                                  "phone": '',  # No phones!
-                                # "email": self.get_email(user),
-                                 "email": 'ttolstoy@ebsco.com',
+                                 "email": self.get_email(user),
+                                 # "email": 'ttolstoy@ebsco.com',
                                  "addresses": self.get_addresses(user)},
                     "expirationDate": user['expirationDate']}
         if not new_user['personal']["addresses"]:
             del new_user['personal']["addresses"]
+        self.counters['successful_checkedout'] += checked_out
         return new_user, user['id']
 
     def get_users(self, source_file):
         for line in source_file:
             self.counters['total2'] += 1
+            user_json = json.loads(line)
             try:
-                user_json = json.loads(line)
                 # if user_json['id'] in ['1021461','1023445', '1132876']:
                 #    print(user_json)
                 if user_json['deleted'] is True:
@@ -77,7 +85,8 @@ class Chalmers:
                             self.counters['pMessage'][user_json['pMessage']] = 1
                         else:
                             self.counters['pMessage'][user_json['pMessage']] += 1
-                    exp_date = dt.strptime(user_json['expirationDate'], '%Y-%m-%d')
+                    exp_date = dt.strptime(
+                        user_json['expirationDate'], '%Y-%m-%d')
                     if exp_date > dt.now():
                         yield[user_json, self.counters]
                     else:
@@ -87,22 +96,27 @@ class Chalmers:
                 print(line)
 
     def get_email(self, user):
+        default_email = 'support.lib@chalmers.se'
         if 'emails' not in user:
-            self.counters['no_emails'] +=1
-            raise ValueError("No emails attribute for {}".format(user['id']))
+            self.counters['no_emails'] += 1
+            print("No emails attribute for {}".format(user['id']))
+            return default_email
         elif len(user['emails']) > 1:
-            self.counters['more_than_one_emails'] +=1
-            raise ValueError("Too many emails for {}".format(user['id']))
+            self.counters['more_than_one_emails'] += 1
+            print("Too many emails for {}".format(user['id']))
+            return user['emails'][0]
         elif not user['emails']:
-            self.counters['no_emails'] +=1
-            raise ValueError("Zero emails for {}".format(user['id']))
+            self.counters['no_emails'] += 1
+            print("Zero emails for {}".format(user['id']))
+            return default_email
         else:
             eml = user['emails'][0]
             reg = r"[^@]+@[^@]+\.[^@]+"
             if not re.match(reg, eml):
-                self.counters['invalid_email'] +=1
-                raise ValueError("email likely invalid {} for user {}"
-                                 .format(eml, user['id']))
+                self.counters['invalid_email'] += 1
+                print("email likely invalid {} for user {}"
+                      .format(eml, user['id']))
+                return default_email
             else:
                 return eml
 
@@ -125,15 +139,15 @@ class Chalmers:
             return self.get_barcode(user)
         # All other users
         elif 'uniqueIds' not in user:
-            self.counters['missing_personnummer'] +=1
+            self.counters['missing_personnummer'] += 1
             raise ValueError("no uniqueIds attrib for {}"
                              .format(user['id']))
         elif len(user['uniqueIds']) > 1:
-            self.counters['too_many_personnummer'] +=1
+            self.counters['too_many_personnummer'] += 1
             raise ValueError("Too many unique ids for {}"
                              .format(user['id']))
         elif not user['uniqueIds']:
-            self.counters['missing_personnummer'] +=1
+            self.counters['missing_personnummer'] += 1
             raise ValueError("Zero uniqueIds for {}"
                              .format(user['id']))
         else:
@@ -142,18 +156,29 @@ class Chalmers:
                 # print(uid)
                 return uid
             else:
-                created_date = dt.strptime(user['createdDate'], '%Y-%m-%dT%H:%M:%SZ')
+                created_date = dt.strptime(
+                    user['createdDate'], '%Y-%m-%dT%H:%M:%SZ')
                 months_back = (dt.now() - datetime.timedelta(6 * 365 / 12))
-                print("Recently added {} patron with invalid swedish personnummer. Adding despite malformed uniqueid {}".format(created_date, uid))
                 # recent user without swedish personnummer
                 if created_date < months_back:
+                    self.counters['incorrect_personnummer_recent'] += 1
+                    print("Recently added {} patron with invalid swedish personnummer. Adding despite malformed uniqueid {}"
+                          .format(created_date, uid))
                     return uid
-                self.counters['incorrect_personnummer'] +=1
+                if self.get_current_checked_out(user) > 0:
+                    self.counters['incorrect_personnummer_checkouts'] += 1
+                    print("Patron with loans. Adding despite malformed uniqueid {}"
+                          .format(uid))
+                    return uid
+                self.counters['incorrect_personnummer'] += 1
                 raise ValueError("Incorrect personnummer ({}) for user {}?"
                                  .format(uid, user['id']))
 
     def get_user_name(self, user):
         return self.get_personnummer(user)
+
+    def get_current_checked_out(self, user):
+        return int(user['fixedFields']["50"]["value"])
 
     def get_ext_uid(self, user):
         cid = next((vf['content'] for vf in user['varFields']
@@ -163,12 +188,18 @@ class Chalmers:
             if not cid:
                 self.counters['missing_cid'] += 1
                 if user['patronType'] in [10, 11, 19, 20]:
-                    raise ValueError("No cid for user {}, and patronType is {}. Skipping"
-                                     .format(user['id'], user['patronType']))
+                    if self.get_current_checked_out(user) > 0:
+                        self.counters['incorrect_cid_checkouts'] += 1
+                        raise ValueError("Patron {} has loans but no CID"
+                                         .format(user['id']))
+                    else:
+                        raise ValueError("No cid for user {}, and patronType is {}. Skipping"
+                                         .format(user['id'], user['patronType']))
                 else:
-                    print("GU-student {} utan CID. TIlldelar barcode".format(user['id']))
+                    print(
+                        "GU-student {} utan CID. TIlldelar barcode".format(user['id']))
                     return self.get_barcode(user)
-            return cid+ '@chalmers.se'
+            return cid + '@chalmers.se'
         elif user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
             barcode = self.get_barcode(user)
             # print("PUBLIC LIBRARY: {} of type{}".format(barcode, user['patronType']))
@@ -204,28 +235,29 @@ class Chalmers:
         # TODO: For organizations, add institution as address type
         # TODO: map addresses better
         if user['patronType'] in [110, 120, 130, 140, 150, 200, 201]:
-            inst_id = 'Library address'
             if 'addresses' not in user:
-                raise ValueError("no addresses attrib for {}".format(user['id']))
+                raise ValueError(
+                    "no addresses attrib for {}".format(user['id']))
             num_adr = len(user['addresses'])
             if num_adr == 0:
                 raise ValueError("0 addresses for {}".format(user['id']))
-            elif num_adr > 2:
-                raise ValueError("Too many addresses for {}".format(user['id']))
+            if num_adr > 2:
+                print("Too many addresses for {}. Taking the first"
+                      .format(user['id']))
             else:
                 if num_adr == 1:
                     adr = self.parse_address(user['addresses'][0])
-                    adr['addressTypeId'] = inst_id
+                    adr['addressTypeId'] = 'Address 1'
                     adr['primaryAddress'] = True
                     return [adr]
                 elif num_adr == 2:
-                    adr_home = self.parse_address(user['addresses'][0])
-                    adr_home['addressTypeId'] = inst_id
-                    adr_home['primaryAddress'] = False
-                    adr_inst = self.parse_address(user['addresses'][1])
-                    adr_inst['addressTypeId'] = inst_id
-                    adr_inst['primaryAddress'] = True
-                    return [adr_home, adr_inst]
+                    adr_1 = self.parse_address(user['addresses'][0])
+                    adr_1['addressTypeId'] = 'Address 1'
+                    adr_1['primaryAddress'] = True
+                    adr_2 = self.parse_address(user['addresses'][1])
+                    adr_2['addressTypeId'] = 'Address 2'
+                    adr_2['primaryAddress'] = False
+                    return [adr_1, adr_2]
 
     def parse_address(self, address):
         lines = address['lines']
