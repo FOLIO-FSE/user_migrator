@@ -6,52 +6,13 @@ import os
 
 import requests
 import usaddress
-
+import pathlib
 from jsonschema import ValidationError, validate
 from mappers.Alabama import Alabama
 from mappers.AlabamaBanner import AlabamaBanner
 from mappers.Chalmers import Chalmers
 from mappers.FiveColleges import FiveColleges
-
-
-def dupe_id_check(id_map, user_id, id_to_add, type_string):
-    if id_to_add not in id_map:
-        id_map[id_to_add] = user_id
-    else:
-        raise ValueError("Duplicate {} ({}) for {}"
-                         .format(type_string, id_to_add, user_id))
-
-
-def get_mapper(mapperName, config):
-    return {
-        'alabama': Alabama,
-        'alabama_banner': AlabamaBanner,
-        'five_colleges': FiveColleges,
-        'chalmers': Chalmers
-    }[mapperName](config)
-
-
-def get_user_schema():
-    schema_location = 'https://raw.githubusercontent.com/folio-org/mod-user-import/master/ramls/schemas/userdataimport.json'
-    req = requests.get(schema_location)
-    return json.loads(req.text)
-
-
-def make_chunks(my_list, size):
-    iterator = iter(my_list)
-    for first in iterator:
-        yield itertools.chain([first], itertools.islice(iterator, size - 1))
-
-
-def map_user_group(groups_map, user):
-    folio_group = next((g['Folio Code'] for g
-                        in groups_map
-                        if g['ILS code'] == user['patronGroup']), 'unmapped')
-    if folio_group == 'unmapped':
-        raise ValueError("source patron group error: {} for {}"
-                         .format(user['patronGroup'], user['id']))
-    else:
-        return folio_group
+from mappers.MsuMigration import MsuMigration
 
 
 def main():
@@ -66,14 +27,14 @@ def main():
                         help="which mapper to use")
     parser.add_argument("source_name",
                         help="source name")
-    parser.add_argument("id_map_path",
-                        help="Where to save user id mappings file")
     args = parser.parse_args()
     user_schema = get_user_schema()
     id_map = {}
     barcode_map = {}
     username_map = {}
     external_user_id_map = {}
+    user_id_map_path = os.path.join(
+        args.result_path, 'patron_id_map.json')
     groups_path = args.groups_map_path
     print('getting user group mappings from {}'.format(groups_path))
     print('saving results to {}'.format(args.result_path))
@@ -101,6 +62,7 @@ def main():
                 i += 1
                 import_struct["users"] = []
                 for user_json in chunk:
+                    old_id = None
                     total_users += 1
                     try:
                         user, old_id = mapper.do_map(user_json[0])
@@ -149,7 +111,7 @@ def main():
                                                  str(i))
                 with open(path, 'w+') as results_file:
                     results_file.write(json.dumps(import_struct, indent=4))
-            with open(args.id_map_path, 'w+') as id_map_file:
+            with open(user_id_map_path, 'w+') as id_map_file:
                 id_map_file.write(json.dumps(id_map, indent=4))
             print('III Users per group')
             print(json.dumps(sierra_users_per_group, sort_keys=True, indent=4))
@@ -158,6 +120,45 @@ def main():
             print("Number of failed users:\t{} out of {} processed users in total after filtering."
                   .format(failed_users, total_users))
             print(json.dumps(last_counter, sort_keys=True, indent=4))
+
+
+def get_mapper(mapperName, config):
+    return {
+        'alabama': Alabama,
+        'alabama_banner': AlabamaBanner,
+        'five_colleges': FiveColleges,
+        'chalmers': Chalmers,
+        'msu': MsuMigration
+    }[mapperName](config)
+
+
+def get_user_schema():
+    schema_location = 'https://raw.githubusercontent.com/folio-org/mod-user-import/master/ramls/schemas/userdataimport.json'
+    req = requests.get(schema_location)
+    return json.loads(req.text)
+
+
+def make_chunks(my_list, size):
+    iterator = iter(my_list)
+    for first in iterator:
+        yield itertools.chain([first], itertools.islice(iterator, size - 1))
+
+
+def map_user_group(groups_map, user):
+
+    folio_group = next((g['Folio Code'] for g
+                        in groups_map
+                        if g['ILS code'] == user['patronGroup']), 'unmapped')
+    return folio_group
+
+
+def dupe_id_check(id_map, user_id, id_to_add, type_string):
+    if id_to_add not in id_map:
+        id_map[id_to_add] = user_id
+    else:
+        if id_to_add:
+            raise ValueError("Duplicate {} ({}) for {}"
+                             .format(type_string, id_to_add, user_id))
 
 
 if __name__ == '__main__':
