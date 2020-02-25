@@ -1,7 +1,7 @@
 # folio_user_migrator
 ## Users
 ### Valuable links
-[Conversion table for users from Sierra](https://github.com/fontanka16/SierraToFolioConverter/blob/master/conversionTable_users.tsv)   
+[Conversion table for users from Sierra](https://github.com/FOLIO-FSE/SierraToFolioConverter/blob/master/conversion_tables/conversionTable_users.tsv)   
 [FOLIO User import JSON Schema](https://github.com/folio-org/mod-user-import/blob/master/ramls/schemas/userdataimport.json)   
 [Explanation of current and future fields in FOLIO](https://docs.google.com/spreadsheets/d/121RpsJNaewhQEKb7k58eNVIhZ7N9oSWowNRJGYjPJ2M/edit?usp=sharing)   
 ### Examples 
