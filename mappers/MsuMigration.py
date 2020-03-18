@@ -23,6 +23,7 @@ class MsuMigration:
         self.default_email = 'ttolstoy@ebsco.com'
         self.counters = {}
         self.counters['pmessage_counts'] = {}
+        self.counters['blockinfo'] = {}
 
     def do_map(self, user):
         checked_out = self.get_current_checked_out(user)
@@ -59,13 +60,18 @@ class MsuMigration:
             try:
                 # if user_json['id'] in ['1021461','1023445', '1132876']:
                 #    print(user_json)
+                # Filter out deleted users
                 if user_json['deleted'] is True:
                     add_stats(self.counters, 'deleted')
+                # Filter out suppressed patrons
                 elif user_json['suppressed'] is True:
                     add_stats(self.counters, 'suppressed')
+                # Filter out blocked patrons
                 # elif user_json['blockInfo']['code'] != '-':
                 #     add_stats(self.counters, 'blocked')
                 else:
+                    add_stats(self.counters['blockinfo'],
+                              user_json['blockInfo']['code'])
                     if user_json['pMessage'].strip() != '':
                         add_stats(self.counters, 'pMessage_count')
                         add_stats(
@@ -75,10 +81,12 @@ class MsuMigration:
                         user_json['expirationDate'], '%Y-%m-%d')
                     if exp_date > dt.now():
                         yield [user_json, self.counters]
+                    # Expired patrons with open loans are brought over
                     elif (exp_date < dt.now()
                           and self.get_current_checked_out(user_json) > 0):
                         add_stats(self.counters, 'expired_with_loans')
                         yield [user_json, self.counters]
+                    # Filter out Expired patrons
                     else:
                         add_stats(self.counters, 'expired')
             except Exception as ee:
@@ -126,6 +134,10 @@ class MsuMigration:
                 raise ValueError("Zero barcodes for {}"
                                  .format(user['id']))
             else:
+                uniques = user.get('uniqueIds', [])
+                for uid in uniques:
+                    if uid..startswith('M'):
+                        add_stats(self.counters, 'single_barcode_unique_M')
                 if user['barcodes'][0].startswith('M'):
                     add_stats(self.counters, 'single_barcode_with_M')
                 elif user['barcodes'][0].startswith('m'):
@@ -140,6 +152,7 @@ class MsuMigration:
         return int(user['fixedFields']["50"]["value"])
 
     def get_ext_uid(self, user):
+
         if 'barcodes' in user:
             if len(user['barcodes']) > 1:
                 for b in user['barcodes']:
