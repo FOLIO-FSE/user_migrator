@@ -40,7 +40,7 @@ class MsuMigration:
                 "lastName": self.get_names(user)[0],
                 "firstName": self.get_names(user)[1],
                 "preferredContactTypeId": "email",
-                "email": "FOLIOcirc@library.missouristate.edu",
+                "email": self.get_email(user)
                 #  "enrollmentDate":
             },
             "expirationDate": user["expirationDate"],
@@ -51,6 +51,7 @@ class MsuMigration:
         )
         notes = self.create_notes(user, new_user)
         block = self.create_blocks(user, new_user)
+        user["personal"]["email"] = "FOLIOcirc@library.missouristate.edu"
         return new_user, user["id"], notes, block
 
     def get_users(self, source_file):
@@ -89,12 +90,13 @@ class MsuMigration:
 
     def create_blocks(self, user, folio_user):
         blockinfo = user.get("blockInfo", {}).get("code", "")
+        codes = {"a": "check address", "m": "mobius block", "u": "unpaid bill"}
         if blockinfo in ["m", "u", "a"]:
             return {
                 "borrowing": True,
                 "renewals": True,
                 "requests": True,
-                "desc": user.get("blockInfo", {}).get("code", ""),
+                "desc": codes.get(blockinfo, ""),
                 "type": "Manual",
                 "userId": folio_user["id"],
                 "id": str(uuid.uuid4()),
@@ -143,7 +145,13 @@ class MsuMigration:
             return self.default_email
         elif len(user["emails"]) > 1:
             add_stats(self.counters, "more_than_one_emails")
-            print("Too many emails for {}".format(user["id"]))
+            msu_email = next(
+                (e for e in user["emails"] if "missouristate.edu" in e), ""
+            )
+            if msu_email:
+                add_stats(self.counters, "more_than_one_emails - missouristate.edu")
+                return msu_email
+            add_stats(self.counters, "more_than_one_emails - first one")
             return user["emails"][0]
         elif not user["emails"]:
             add_stats(self.counters, "no_emails")
@@ -169,7 +177,7 @@ class MsuMigration:
         for barcode in (bc.strip() for bc in barcodes):
             if barcode.startswith("M"):
                 m_number = barcode
-            elif len(barcode) == 16:
+            elif len(barcode) == 16 or str(barcode).startswith("22356"):
                 folio_barcode = barcode
             else:
                 other = True
@@ -179,8 +187,8 @@ class MsuMigration:
         if other and not m_number:
             print(f"Other barcode and no m_number for user {user['id']}")
         return {
-            "externalSystemId": (m_number if m_number else barcode),
-            "barcode": barcode,
+            "externalSystemId": (m_number),
+            "barcode": folio_barcode if folio_barcode else m_number,
         }
 
     def get_current_checked_out(self, user):
