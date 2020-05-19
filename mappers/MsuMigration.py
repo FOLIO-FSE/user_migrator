@@ -25,6 +25,7 @@ class MsuMigration:
         self.default_email = "ttolstoy@ebsco.com"
         self.counters = {}
         self.counters["pmessage_counts"] = {}
+        self.counters["blockinfo"] = {}
 
     def do_map(self, user):
         add_stats(self.counters, "tot_checkedout", self.get_current_checked_out(user))
@@ -61,13 +62,19 @@ class MsuMigration:
             try:
                 # if user_json['id'] in ['1021461','1023445', '1132876']:
                 #    print(user_json)
+                # Filter out deleted users
                 if user_json["deleted"] is True:
                     add_stats(self.counters, "deleted")
+                # Filter out suppressed patrons
                 elif user_json["suppressed"] is True:
                     add_stats(self.counters, "suppressed")
+                # Filter out blocked patrons
                 # elif user_json['blockInfo']['code'] != '-':
                 #     add_stats(self.counters, 'blocked')
                 else:
+                    add_stats(
+                        self.counters["blockinfo"], user_json["blockInfo"]["code"]
+                    )
                     if user_json["pMessage"].strip() != "":
                         add_stats(self.counters, "pMessage_count")
                         add_stats(
@@ -82,6 +89,7 @@ class MsuMigration:
                     ):
                         add_stats(self.counters, "expired_with_loans_or_money_owed")
                         yield [user_json, self.counters]
+                    # Filter out Expired patrons
                     else:
                         add_stats(self.counters, "expired")
             except Exception as ee:
@@ -151,7 +159,7 @@ class MsuMigration:
             if msu_email:
                 add_stats(self.counters, "more_than_one_emails - missouristate.edu")
                 return msu_email
-            add_stats(self.counters, "more_than_one_emails - first one")
+            add_stats(self.counters, f"{user['id']}")
             return user["emails"][0]
         elif not user["emails"]:
             add_stats(self.counters, "no_emails")
