@@ -79,8 +79,12 @@ def main():
                         }
                     else:
                         raise ValueError("Duplicate user id for {}".format(old_id))
-                    # patron group is mapped and set
-                    dupe_id_check(barcode_map, old_id, user["barcode"], "barcode")
+
+                    if user["barcode"]:
+                        dupe_id_check(barcode_map, old_id, user["barcode"], "barcode")
+                    else:
+                        del user["barcode"]
+
                     dupe_id_check(
                         external_user_id_map,
                         old_id,
@@ -160,13 +164,14 @@ def map_user_group(groups_map, user):
 
 
 def dupe_id_check(id_map, user_id, id_to_add, type_string):
-    if id_to_add not in id_map:
+    if not id_to_add:
+        raise ValueError("EMPTY {} ({}) for {}".format(type_string, id_to_add, user_id))
+    elif id_to_add not in id_map:
         id_map[id_to_add] = user_id
     else:
-        if id_to_add:
-            raise ValueError(
-                "Duplicate {} ({}) for {}".format(type_string, id_to_add, user_id)
-            )
+        raise ValueError(
+            "Duplicate {} ({}) for {}".format(type_string, id_to_add, user_id)
+        )
 
 
 if __name__ == "__main__":

@@ -52,46 +52,41 @@ class MsuMigration:
         )
         notes = self.create_notes(user, new_user)
         block = self.create_blocks(user, new_user)
-        user["personal"]["email"] = "FOLIOcirc@library.missouristate.edu"
+        new_user["personal"]["email"] = "FOLIOcirc@library.missouristate.edu"
         return new_user, user["id"], notes, block
 
     def get_users(self, source_file):
         for line in source_file:
-            add_stats(self.counters, "total2")
-            user_json = json.loads(line)
+            add_stats(self.counters, "total users in file")
             try:
-                # if user_json['id'] in ['1021461','1023445', '1132876']:
-                #    print(user_json)
+                user_json = json.loads(line)
                 # Filter out deleted users
                 if user_json["deleted"] is True:
                     add_stats(self.counters, "deleted")
                 # Filter out suppressed patrons
                 elif user_json["suppressed"] is True:
                     add_stats(self.counters, "suppressed")
-                # Filter out blocked patrons
-                # elif user_json['blockInfo']['code'] != '-':
-                #     add_stats(self.counters, 'blocked')
                 else:
                     add_stats(
                         self.counters["blockinfo"], user_json["blockInfo"]["code"]
                     )
                     if user_json["pMessage"].strip() != "":
-                        add_stats(self.counters, "pMessage_count")
+                        add_stats(self.counters, "Number of users with pMessages")
                         add_stats(
                             self.counters["pmessage_counts"], user_json["pMessage"]
                         )
                     exp_date = dt.strptime(user_json["expirationDate"], "%Y-%m-%d")
-                    if exp_date > dt.now():
-                        yield [user_json, self.counters]
-                    elif exp_date < dt.now() and (
-                        self.get_current_checked_out(user_json) > 0
-                        or float(user_json["fixedFields"]["96"]["value"]) > 0
-                    ):
-                        add_stats(self.counters, "expired_with_loans_or_money_owed")
-                        yield [user_json, self.counters]
-                    # Filter out Expired patrons
-                    else:
-                        add_stats(self.counters, "expired")
+                    if exp_date < dt.now():
+                        if (
+                            self.get_current_checked_out(user_json) > 0
+                            or float(user_json["fixedFields"]["96"]["value"]) > 0
+                        ):
+                            add_stats(self.counters, "expired_with_loans_or_money_owed")
+                        user_json["expirationDate"] = dt.now().strftime("%Y-%m-%d")
+                        add_stats(
+                            self.counters, "expired, setting today as expiration date"
+                        )
+                    yield [user_json, self.counters]
             except Exception as ee:
                 print(ee)
                 print(line)
