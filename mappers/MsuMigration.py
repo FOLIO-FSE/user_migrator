@@ -3,6 +3,7 @@ import io
 import json
 import re
 import uuid
+import traceback
 from datetime import datetime as dt
 
 import requests
@@ -13,7 +14,6 @@ class MsuMigration:
     # (fixed fields 50) and sum them up.
 
     def __init__(self, config):
-        self.groupsmap = config["groupsmap"]
         # TODO: Move country codes to central implementation
         country_codes_url = (
             "https://raw.githubusercontent.com/"
@@ -24,11 +24,16 @@ class MsuMigration:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
         self.default_email = "ttolstoy@ebsco.com"
         self.counters = {}
+        self.migration_report = {}
         self.counters["pmessage_counts"] = {}
         self.counters["blockinfo"] = {}
 
     def do_map(self, user):
-        add_stats(self.counters, "tot_checkedout", self.get_current_checked_out(user))
+        add_stats(
+            self.counters,
+            "Total number of checkouts for all users",
+            self.get_current_checked_out(user),
+        )
         bc = self.get_barcode_values(user)
         new_user = {
             "username": self.get_username(user),
@@ -48,53 +53,78 @@ class MsuMigration:
             "type": "object",
         }
         add_stats(
-            self.counters, "successful_checkedout", self.get_current_checked_out(user)
+            self.counters,
+            "Total number of checkouts for successfully migrated users",
+            self.get_current_checked_out(user),
         )
         notes = self.create_notes(user, new_user)
         block = self.create_blocks(user, new_user)
         new_user["personal"]["email"] = "FOLIOcirc@library.missouristate.edu"
         return new_user, user["id"], notes, block
 
+    def add_to_migration_report(self, header, messageString):
+        # TODO: Move to interface or parent class
+        if header not in self.migration_report:
+            self.migration_report[header] = list()
+        self.migration_report[header].append(messageString)
+
     def get_users(self, source_file):
+        print("")
         for line in source_file:
-            add_stats(self.counters, "total users in file")
+            add_stats(self.counters, "Total users in file")
+            if self.counters["Total users in file"] % 100 == 0:
+                print(
+                    f'{self.counters["Total users in file"]} users processed', end="\r"
+                )
             try:
                 user_json = json.loads(line)
                 # Filter out deleted users
                 if user_json["deleted"] is True:
-                    add_stats(self.counters, "deleted")
+                    add_stats(self.counters, "Deleted users in file")
                 # Filter out suppressed patrons
                 elif user_json["suppressed"] is True:
-                    add_stats(self.counters, "suppressed")
+                    add_stats(self.counters, "Suppressed users in file")
                 else:
                     add_stats(
-                        self.counters["blockinfo"], user_json["blockInfo"]["code"]
+                        self.counters, f'Blockinfo: {user_json["blockInfo"]["code"]}'
                     )
                     if user_json["pMessage"].strip() != "":
-                        add_stats(self.counters, "Number of users with pMessages")
                         add_stats(
-                            self.counters["pmessage_counts"], user_json["pMessage"]
+                            self.counters, "Number of users with pMessages in Total"
                         )
-                    exp_date = dt.strptime(user_json["expirationDate"], "%Y-%m-%d")
-                    if exp_date < dt.now():
+                        add_stats(
+                            self.counters,
+                            f'Number of users with pMessages {user_json["pMessage"]}',
+                        )
+                    temp_date = dt.now()
+                    temp_date_str = temp_date.strftime("%Y-%m-%d")
+                    exp_date = dt.strptime(
+                        user_json.get("expirationDate", temp_date_str), "%Y-%m-%d"
+                    )
+                    if exp_date < temp_date:
                         if (
                             self.get_current_checked_out(user_json) > 0
                             or float(user_json["fixedFields"]["96"]["value"]) > 0
                         ):
-                            add_stats(self.counters, "expired_with_loans_or_money_owed")
-                        user_json["expirationDate"] = dt.now().strftime("%Y-%m-%d")
+                            add_stats(
+                                self.counters, "Expired users with loans or money owned"
+                            )
+                        user_json["expirationDate"] = temp_date_str
                         add_stats(
-                            self.counters, "expired, setting today as expiration date"
+                            self.counters,
+                            "Expired users, seting today as expiration date",
                         )
                     yield [user_json, self.counters]
             except Exception as ee:
                 print(ee)
+                traceback.print_exc()
                 print(line)
 
     def create_blocks(self, user, folio_user):
         blockinfo = user.get("blockInfo", {}).get("code", "")
         codes = {"a": "check address", "m": "mobius block", "u": "unpaid bill"}
         if blockinfo in ["m", "u", "a"]:
+            add_stats(self.counters, "Created blocks")
             return {
                 "borrowing": True,
                 "renewals": True,
@@ -106,6 +136,7 @@ class MsuMigration:
             }
 
     def create_notes(self, user, folio_user):
+        add_stats(self.counters, "Created notes - Total")
         # migrated values note
         yield {
             "domain": "users",
@@ -126,6 +157,8 @@ class MsuMigration:
         }
         # x notes
         for x in get_varfields_no_subfield(user, "x"):
+            add_stats(self.counters, "Created notes - Total")
+            add_stats(self.counters, "Created notes - x")
             yield {
                 "domain": "users",
                 "typeId": "b6e8babb-92db-43c5-8b2b-aec170702926",
@@ -143,8 +176,10 @@ class MsuMigration:
 
     def get_email(self, user):
         if "emails" not in user:
-            add_stats(self.counters, "no_emails")
-            print("No emails attribute for {}".format(user["id"]))
+            add_stats(self.counters, "Email - no emails attribute")
+            self.add_to_migration_report(
+                "User Email Issues", f'No emails attribute for {user["id"]}'
+            )
             return self.default_email
         elif len(user["emails"]) > 1:
             add_stats(self.counters, "more_than_one_emails")
@@ -157,15 +192,20 @@ class MsuMigration:
             add_stats(self.counters, f"{user['id']}")
             return user["emails"][0]
         elif not user["emails"]:
-            add_stats(self.counters, "no_emails")
-            print("Zero emails for {}".format(user["id"]))
+            add_stats(self.counters, "Email - empty emails attribute")
+            self.add_to_migration_report(
+                "User Email Issues", f'Zero emails for {user["id"]}'
+            )
             return self.default_email
         else:
             eml = user["emails"][0]
             reg = r"[^@]+@[^@]+\.[^@]+"
             if not re.match(reg, eml):
-                add_stats(self.counters, "invalid_email")
-                print("email likely invalid {} for user {}".format(eml, user["id"]))
+                add_stats(self.counters, "Email - Likely invalid")
+                self.add_to_migration_report(
+                    "User Email Issues",
+                    "email likely invalid {} for user {}".format(eml, user["id"]),
+                )
                 return self.default_email
             else:
                 return eml
@@ -184,11 +224,17 @@ class MsuMigration:
                 folio_barcode = barcode
             else:
                 other = True
-                print(f"other barcode {barcode} for user {user['id']}")
+                self.add_to_migration_report(
+                    "Barcode issues", f"other barcode {barcode} for user {user['id']}"
+                )
         if other and not folio_barcode:
-            print(f"Other barcode and no barcode for user {user['id']}")
+            self.add_to_migration_report(
+                "Barcode issues", f"Other barcode and no barcode for user {user['id']}"
+            )
         if other and not m_number:
-            print(f"Other barcode and no m_number for user {user['id']}")
+            self.add_to_migration_report(
+                "Barcode issues", f"Other barcode and no m_number for user {user['id']}"
+            )
         return {
             "externalSystemId": (m_number),
             "barcode": folio_barcode if folio_barcode else m_number,
