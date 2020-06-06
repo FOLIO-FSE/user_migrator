@@ -33,7 +33,6 @@ class Worker:
         self.id_map = {}
         self.chunks = chunks
         self.folio_users_per_group = {}
-        self.sierra_users_per_group = {}
         self.barcode_map = {}
         self.username_map = {}
         self.external_user_id_map = {}
@@ -46,8 +45,10 @@ class Worker:
         }
 
     def work(self):
+        b = 0
         print("Starting....")
         for chunk in self.chunks:
+            b += 1
             add_stats(self.stats, "Number of batches")
             self.import_struct["users"] = []
             for user_json in chunk:
@@ -93,11 +94,7 @@ class Worker:
                         f"Failed parsing address {str(rle)} for user {json.dumps(user_json)}",
                     )
 
-            path = "{}/{}_{}.json".format(
-                self.results_path,
-                "users",
-                str(add_stats(self.stats, "Number of batches")),
-            )
+            path = f"{self.results_path}/users_{b}.json"
             with open(path, "w+") as results_file:
                 results_file.write(json.dumps(self.import_struct, indent=4))
 
@@ -154,7 +151,7 @@ class Worker:
 
         print("## Sierra/III Users per group")
         print_dict_to_md_table(
-            self.sierra_users_per_group, "Sierra User group", "Count"
+            self.mapper.sierra_users_per_group, "Sierra User group", "Count"
         )
 
         print("## FOLIO Users per group")
@@ -172,12 +169,12 @@ class Worker:
         if other_report:
             for a in other_report:
                 print(f"## {a}")
-                for b in sorted(other_report[a]):
+                for b in set(sorted(other_report[a])):
                     print(f"{b}\\")
         else:
             for a in self.migration_report:
                 print(f"## {a}")
-                for b in sorted(self.migration_report[a]):
+                for b in set(sorted(self.migration_report[a])):
                     print(f"{b}\\")
 
     def map_user_group(self, user):

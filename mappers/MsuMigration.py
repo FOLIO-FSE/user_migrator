@@ -24,6 +24,7 @@ class MsuMigration:
         self.country_data = list(csv.DictReader(io.StringIO(req.text)))
         self.default_email = "ttolstoy@ebsco.com"
         self.counters = {}
+        self.sierra_users_per_group = {}
         self.migration_report = {}
         self.counters["pmessage_counts"] = {}
         self.counters["blockinfo"] = {}
@@ -35,6 +36,7 @@ class MsuMigration:
             self.get_current_checked_out(user),
         )
         bc = self.get_barcode_values(user)
+        add_stats(self.sierra_users_per_group, str(user["patronType"]))
         new_user = {
             "username": self.get_username(user),
             "id": str(uuid.uuid4()),
